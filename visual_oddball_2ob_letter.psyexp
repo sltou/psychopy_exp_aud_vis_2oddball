@@ -234,7 +234,7 @@
       <CodeComponent name="condition_setup" plugin="None">
         <Param val="" valType="extendedCode" updates="constant" name="Before Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Before JS Experiment"/>
-        <Param val="import numpy as np&amp;#10;&amp;#10;&amp;#10;# --- Stimulus definitions  ---&amp;#10;# (shape, size, type) for each stimulus category&amp;#10;STIMULI = {&amp;#10;    &quot;regular&quot;:   {&quot;size&quot;: 0.4, &quot;text&quot;: expInfo['nontarget']},&amp;#10;    &quot;oddball&quot;:    {&quot;size&quot;: 0.4, &quot;text&quot;: expInfo['target']}, #0.5&amp;#10;    &quot;distractor&quot;: {&quot;size&quot;: 0.4, &quot;text&quot;: &quot;arrow&quot;},&amp;#10;}&amp;#10;&amp;#10;DISTRACTORS = ['&gt;', '&lt;', '^', 'v']*5&amp;#10;&amp;#10;# --- Timing ---&amp;#10;STIMULUS_DURATION = 0.2&amp;#10;ITI_RANGE         = (1.2, 1.4)  # seconds&amp;#10;&amp;#10;# --- Trial counts ---&amp;#10;N_CHUNKS = 10  # chunks × 10 trials = 200 trials total&amp;#10;N_TRIALS = N_CHUNKS * 20  # 160 standard, 20 oddball, 20 distractor per experiment&amp;#10;&amp;#10;# --- Build trial sequence ---&amp;#10;# Each 10-trial chunk:&amp;#10;#   Position 0 : always standard (no oddball/distractor as first trial)&amp;#10;#   Positions 1–9 : 7× standard + 1× oddball + 1× distractor, shuffled together&amp;#10;&amp;#10;trial_text = []&amp;#10;trial_sizes = []&amp;#10;trial_types = []&amp;#10;&amp;#10;for _ in range(N_CHUNKS):&amp;#10;    inner = (&amp;#10;        [(&quot;regular&quot;,   STIMULI[&quot;regular&quot;][&quot;text&quot;],   STIMULI[&quot;regular&quot;][&quot;size&quot;])]   * 15&amp;#10;      + [(&quot;oddball&quot;,    STIMULI[&quot;oddball&quot;][&quot;text&quot;],    STIMULI[&quot;oddball&quot;][&quot;size&quot;])]     * 2&amp;#10;      + [(&quot;distractor&quot;, DISTRACTORS.pop(0), STIMULI[&quot;distractor&quot;][&quot;size&quot;])] * 2&amp;#10;    )&amp;#10;    np.random.shuffle(inner)  # shuffles all three fields together — sizes stay aligned&amp;#10;&amp;#10;    chunk = [(&quot;regular&quot;, STIMULI[&quot;regular&quot;][&quot;text&quot;], STIMULI[&quot;regular&quot;][&quot;size&quot;])] + inner&amp;#10;&amp;#10;    types, text, sizes = zip(*chunk)&amp;#10;    trial_types  += list(types)&amp;#10;    trial_text  += list(text)&amp;#10;    trial_sizes  += list(sizes)&amp;#10;&amp;#10;# --- Verification ---&amp;#10;assert len(trial_types) == N_TRIALS&amp;#10;assert trial_types.count(&quot;regular&quot;)    == 160&amp;#10;assert trial_types.count(&quot;oddball&quot;)    == 20&amp;#10;assert trial_types.count(&quot;distractor&quot;) == 20&amp;#10;&amp;#10;# --- ITI list (includes stimulus duration as onset offset) ---&amp;#10;iti_list = list(&amp;#10;    ITI_RANGE[0]&amp;#10;    + np.random.random(N_TRIALS) * (ITI_RANGE[1] - ITI_RANGE[0])&amp;#10;    + STIMULUS_DURATION&amp;#10;)&amp;#10;" valType="extendedCode" updates="constant" name="Begin Experiment"/>
+        <Param val="import numpy as np&amp;#10;&amp;#10;&amp;#10;# --- Stimulus definitions  ---&amp;#10;# (shape, size, type) for each stimulus category&amp;#10;STIMULI = {&amp;#10;    &quot;regular&quot;:   {&quot;size&quot;: 0.4, &quot;text&quot;: expInfo['nontarget']},&amp;#10;    &quot;oddball&quot;:    {&quot;size&quot;: 0.4, &quot;text&quot;: expInfo['target']}, #0.5&amp;#10;    &quot;distractor&quot;: {&quot;size&quot;: 0.4, &quot;text&quot;: &quot;arrow&quot;},&amp;#10;}&amp;#10;&amp;#10;DISTRACTORS = ['&gt;', '&lt;', '^', 'v']*5&amp;#10;&amp;#10;# --- Timing ---&amp;#10;STIMULUS_DURATION = 0.2&amp;#10;ITI_RANGE         = (1.4, 1.6)  # seconds&amp;#10;&amp;#10;# --- Trial counts ---&amp;#10;N_CHUNKS = 10  # chunks × 10 trials = 200 trials total&amp;#10;N_TRIALS = N_CHUNKS * 20  # 160 standard, 20 oddball, 20 distractor per experiment&amp;#10;&amp;#10;# --- Build trial sequence ---&amp;#10;# Each 10-trial chunk:&amp;#10;#   Position 0 : always standard (no oddball/distractor as first trial)&amp;#10;#   Positions 1–9 : 7× standard + 1× oddball + 1× distractor, shuffled together&amp;#10;&amp;#10;trial_text = []&amp;#10;trial_sizes = []&amp;#10;trial_types = []&amp;#10;&amp;#10;for _ in range(N_CHUNKS):&amp;#10;    inner = (&amp;#10;        [(&quot;regular&quot;,   STIMULI[&quot;regular&quot;][&quot;text&quot;],   STIMULI[&quot;regular&quot;][&quot;size&quot;])]   * 15&amp;#10;      + [(&quot;oddball&quot;,    STIMULI[&quot;oddball&quot;][&quot;text&quot;],    STIMULI[&quot;oddball&quot;][&quot;size&quot;])]     * 2&amp;#10;      + [(&quot;distractor&quot;, DISTRACTORS.pop(0), STIMULI[&quot;distractor&quot;][&quot;size&quot;])] * 2&amp;#10;    )&amp;#10;    np.random.shuffle(inner)  # shuffles all three fields together — sizes stay aligned&amp;#10;&amp;#10;    chunk = [(&quot;regular&quot;, STIMULI[&quot;regular&quot;][&quot;text&quot;], STIMULI[&quot;regular&quot;][&quot;size&quot;])] + inner&amp;#10;&amp;#10;    types, text, sizes = zip(*chunk)&amp;#10;    trial_types  += list(types)&amp;#10;    trial_text  += list(text)&amp;#10;    trial_sizes  += list(sizes)&amp;#10;&amp;#10;# --- Verification ---&amp;#10;assert len(trial_types) == N_TRIALS&amp;#10;assert trial_types.count(&quot;regular&quot;)    == 160&amp;#10;assert trial_types.count(&quot;oddball&quot;)    == 20&amp;#10;assert trial_types.count(&quot;distractor&quot;) == 20&amp;#10;&amp;#10;# --- ITI list (includes stimulus duration as onset offset) ---&amp;#10;iti_list = list(&amp;#10;    ITI_RANGE[0]&amp;#10;    + np.random.random(N_TRIALS) * (ITI_RANGE[1] - ITI_RANGE[0])&amp;#10;    + STIMULUS_DURATION&amp;#10;)&amp;#10;" valType="extendedCode" updates="constant" name="Begin Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Experiment"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin JS Routine"/>
         <Param val="" valType="extendedCode" updates="constant" name="Begin Routine"/>
@@ -284,7 +284,7 @@
         <Param val="set_shape_edges" valType="code" updates="None" name="name"/>
       </CodeComponent>
       <TextComponent name="stimulus_text" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="black" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -293,7 +293,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="stimulus_text" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
@@ -866,7 +866,7 @@
         <Param val="1.8" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
       <TextComponent name="text_oddball_" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="-1.0000, -1.0000, -1.0000" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -875,7 +875,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="text_oddball_" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
@@ -883,7 +883,7 @@
         <Param val="True" valType="bool" updates="None" name="saveStartStop"/>
         <Param val="" valType="code" updates="None" name="startEstim"/>
         <Param val="time (s)" valType="str" updates="None" name="startType"/>
-        <Param val="0.5" valType="code" updates="None" name="startVal"/>
+        <Param val="0.2" valType="code" updates="None" name="startVal"/>
         <Param val="duration (s)" valType="str" updates="None" name="stopType"/>
         <Param val="$STIMULUS_DURATION" valType="code" updates="constant" name="stopVal"/>
         <Param val="True" valType="bool" updates="None" name="syncScreenRefresh"/>
@@ -1021,7 +1021,7 @@
         <Param val="1.8" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
       <TextComponent name="text_regular_" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="-1.0000, -1.0000, -1.0000" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -1030,7 +1030,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="text_regular_" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
@@ -1176,7 +1176,7 @@
         <Param val="1.8" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
       <TextComponent name="text_distractor_" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="black" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -1185,7 +1185,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="text_distractor_" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
@@ -1248,7 +1248,7 @@
         <Param val="1.8" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
       <TextComponent name="text_oddball_combined" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="black" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -1257,7 +1257,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="text_oddball_combined" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
@@ -1275,7 +1275,7 @@
         <Param val="" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
       <TextComponent name="text_regular_combined" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="black" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -1284,7 +1284,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="text_regular_combined" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
@@ -1302,7 +1302,7 @@
         <Param val="" valType="num" updates="constant" name="wrapWidth"/>
       </TextComponent>
       <TextComponent name="text_distractor_combined" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="black" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -1311,7 +1311,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="text_distractor_combined" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
@@ -1675,7 +1675,7 @@
         <Param val="set_shape_edges_2" valType="code" updates="None" name="name"/>
       </CodeComponent>
       <TextComponent name="stimulus_text_2" plugin="None">
-        <Param val="white" valType="color" updates="constant" name="color"/>
+        <Param val="black" valType="color" updates="constant" name="color"/>
         <Param val="rgb" valType="str" updates="constant" name="colorSpace"/>
         <Param val="1" valType="num" updates="constant" name="contrast"/>
         <Param val="False" valType="bool" updates="None" name="disabled"/>
@@ -1684,7 +1684,7 @@
         <Param val="None" valType="str" updates="constant" name="flip"/>
         <Param val="Arial" valType="str" updates="constant" name="font"/>
         <Param val="LTR" valType="str" updates="None" name="languageStyle"/>
-        <Param val="0.15" valType="num" updates="constant" name="letterHeight"/>
+        <Param val="0.5" valType="num" updates="constant" name="letterHeight"/>
         <Param val="stimulus_text_2" valType="code" updates="None" name="name"/>
         <Param val="" valType="num" updates="constant" name="opacity"/>
         <Param val="0" valType="num" updates="constant" name="ori"/>
