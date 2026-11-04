@@ -26,7 +26,7 @@ distractor assignment CSVs   pattern_visit_schedule.csv
 - The participant ID is not copied into the schedule or distractor files, which removes the possibility of inconsistent participant entries.
 - `test` is already assigned to `TEST` / `PAT07` for equipment checks.
 
-See [allocation/README.md](allocation/README.md) and [docs/CRC_INSTRUCTIONS.md](docs/CRC_INSTRUCTIONS.md) for the exact workflow.
+See [allocation/README.md](../allocation/README.md) and [docs/CRC_INSTRUCTIONS.md](docs/CRC_INSTRUCTIONS.md) for the exact workflow.
 
 ## Run the tasks
 
@@ -38,20 +38,20 @@ Use the PsychoPy version and lab hardware configuration already established on t
 
 At launch, enter the participant ID exactly as recorded in `participant_profiles.csv` and enter session `1` through `10`. Each script resolves and validates its stimulus set and distractor files before continuing.
 
-Do not open, save, or regenerate the Builder files on a computer with a different PsychoPy version. The `.psyexp` files in `archive/builder_sources/` are retained only as structural source references; the deployed `.py` files contain the current allocation logic.
+Do not open, save, or regenerate the Builder files on a computer with a different PsychoPy version. The `.psyexp` files in `archive/legacy_builder_sources/` are retained only as structural source references; the deployed `.py` files contain the current allocation logic.
 
 ## Clean an existing experiment computer
 
 Switching branches removes tracked files, but Git deliberately leaves old untracked and ignored files in place. To identify those local leftovers without touching participant results, run:
 
 ```bash
-python3 tools/archive_local_extras.py
+python3 archive/tools/archive_local_extras.py
 ```
 
 The default is preview-only. Review the list, then move the listed files into a timestamped, recoverable local archive:
 
 ```bash
-python3 tools/archive_local_extras.py --apply
+python3 archive/tools/archive_local_extras.py --apply
 ```
 
 The utility never deletes files and never touches `.git/`, `data/`, or anything already under `archive/`. It preserves each file's original relative path inside `archive/local_extras_<timestamp>/`. These local archive folders are ignored by Git.
@@ -61,8 +61,8 @@ The utility never deletes files and never touches `.git/`, `data/`, or anything 
 From the repository root:
 
 ```bash
-python3 tools/validate_deployment.py --profiles-only
-python3 tools/validate_deployment.py
+python3 archive/tools/validate_deployment.py --profiles-only
+python3 archive/tools/validate_deployment.py
 ```
 
 The first command is the quick check after enrollment edits. The second verifies mappings, media counts, hashes, stimulus formats, no-repeat constraints, and Python syntax. It does not launch PsychoPy or alter experiment files.
@@ -70,13 +70,13 @@ The first command is the quick check after enrollment edits. The second verifies
 ## Repository layout
 
 - `allocation/` — the one enrollment table plus fixed pattern and distractor mappings
-- `stimuli/visual/` — 10 visual sets, with SVG masters and same-size PNG deployment copies
-- `stimuli/auditory/` — 10 auditory sets, each containing five 250 ms WAV files
-- `stimuli/distractors/` — auditory distractors, 400 familiar-object images, and practice assets
-- `resource/voiceover/` — task-specific neutral American female instruction recordings
-- `docs/` — protocol, CRC workflow, voiceover record, and randomization records
-- `archive/builder_sources/` — non-runtime Builder source references retained for future redevelopment
-- `tools/` — read-only deployment validation
+- `archive/runtime_assets/stimuli/visual/` — 10 visual sets, with SVG masters and same-size PNG deployment copies
+- `archive/runtime_assets/stimuli/auditory/` — 10 auditory sets, each containing five 250 ms WAV files
+- `archive/runtime_assets/stimuli/distractors/` — auditory distractors, 400 familiar-object images, and practice assets
+- `archive/runtime_assets/resource/voiceover/` — task-specific neutral American female instruction recordings
+- `archive/docs/` — protocol, CRC workflow, voiceover record, and randomization records
+- `archive/legacy_builder_sources/` — non-runtime Builder source references retained for future redevelopment
+- `archive/tools/` — deployment validation and local cleanup utilities
 
 ## Trigger codes
 

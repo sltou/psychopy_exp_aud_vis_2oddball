@@ -653,7 +653,9 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         if (
             (candidate / 'allocation' / 'participant_profiles.csv').is_file()
             and (candidate / 'allocation' / 'pattern_visit_schedule.csv').is_file()
-            and (candidate / 'stimuli' / 'visual').is_dir()
+            and (
+                candidate / 'archive' / 'runtime_assets' / 'stimuli' / 'visual'
+            ).is_dir()
         ):
             study_root = candidate
             break
@@ -662,6 +664,8 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             'Could not find the deployment allocation and stimulus folders. '
             'Keep them beside this task or set ODDBALL_STUDY_ROOT.'
         )
+    runtime_assets_dir = study_root / 'archive' / 'runtime_assets'
+    voiceover_root = runtime_assets_dir / 'resource' / 'voiceover'
 
     # participant_id -> sequence_id/pattern_id -> session stimulus IDs.
     subject_id = str(expInfo['subject_id']).strip()
@@ -705,7 +709,9 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
 
     # SVG files remain the vector masters. PsychoPy 2024.2.2 ImageStim does
     # not load SVG, so deployment also includes matching 1000x1000 PNG copies.
-    primary_folder = study_root / 'stimuli' / 'visual' / visual_stimulus_id
+    primary_folder = (
+        runtime_assets_dir / 'stimuli' / 'visual' / visual_stimulus_id
+    )
     primary_svg_files = sorted(
         path for path in primary_folder.glob('*.svg') if path.is_file()
     ) if primary_folder.is_dir() else []
@@ -800,7 +806,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             )
         candidates = [
             study_root / relative_path,
-            study_root / 'stimuli' / 'distractors' / 'visual' / relative_path,
+            runtime_assets_dir / 'stimuli' / 'distractors' / 'visual' / relative_path,
         ]
         for media_path in candidates:
             if media_path.is_file():
@@ -1222,7 +1228,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     key_welcome.keys = []
     key_welcome.rt = []
     _key_welcome_allKeys = []
-    read_welcome.setSound('resource/voiceover/visual/welcome.wav', hamming=True)
+    read_welcome.setSound(str(voiceover_root / 'visual' / 'welcome.wav'), hamming=True)
     read_welcome.setVolume(1.0, log=False)
     read_welcome.seek(0)
     # store start times for _welcome
@@ -1458,7 +1464,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     key_instruct_oddball.keys = []
     key_instruct_oddball.rt = []
     _key_instruct_oddball_allKeys = []
-    read_instruct_oddball.setSound('resource/voiceover/visual/target.wav', hamming=True)
+    read_instruct_oddball.setSound(str(voiceover_root / 'visual' / 'target.wav'), hamming=True)
     read_instruct_oddball.setVolume(1.0, log=False)
     read_instruct_oddball.seek(0)
     # store start times for instruct_oddball
@@ -1758,7 +1764,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     key_instruct_regular.keys = []
     key_instruct_regular.rt = []
     _key_instruct_regular_allKeys = []
-    read_instruct_regular.setSound('resource/voiceover/visual/standard.wav', hamming=True)
+    read_instruct_regular.setSound(str(voiceover_root / 'visual' / 'standard.wav'), hamming=True)
     read_instruct_regular.setVolume(1.0, log=False)
     read_instruct_regular.seek(0)
     # store start times for instruct_regular
@@ -2058,7 +2064,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     key_instruct_distractor.keys = []
     key_instruct_distractor.rt = []
     _key_instruct_distractor_allKeys = []
-    read_instruct_distractor.setSound('resource/voiceover/visual/distractor.wav', hamming=True)
+    read_instruct_distractor.setSound(str(voiceover_root / 'visual' / 'distractor.wav'), hamming=True)
     read_instruct_distractor.setVolume(1.0, log=False)
     read_instruct_distractor.seek(0)
     # store start times for instruct_distractor
@@ -2383,7 +2389,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         key_instruct_combined.keys = []
         key_instruct_combined.rt = []
         _key_instruct_combined_allKeys = []
-        read_instruct_combined.setSound('resource/voiceover/visual/combined.wav', hamming=True)
+        read_instruct_combined.setSound(str(voiceover_root / 'visual' / 'combined.wav'), hamming=True)
         read_instruct_combined.setVolume(1.0, log=False)
         read_instruct_combined.seek(0)
         # store start times for instruct_combined
@@ -2755,7 +2761,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         key_instruct_verify.keys = []
         key_instruct_verify.rt = []
         _key_instruct_verify_allKeys = []
-        read_instruct_verify.setSound('resource/voiceover/visual/verify.wav', hamming=True)
+        read_instruct_verify.setSound(str(voiceover_root / 'visual' / 'verify.wav'), hamming=True)
         read_instruct_verify.setVolume(1.0, log=False)
         read_instruct_verify.seek(0)
         # store start times for instruct_verify
@@ -2971,7 +2977,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         key_instruct_begin.keys = []
         key_instruct_begin.rt = []
         _key_instruct_begin_allKeys = []
-        read_instruct_begin.setSound('resource/voiceover/visual/begin_block.wav', hamming=True)
+        read_instruct_begin.setSound(str(voiceover_root / 'visual' / 'begin_block.wav'), hamming=True)
         read_instruct_begin.setVolume(1.0, log=False)
         read_instruct_begin.seek(0)
         # Run 'Begin Routine' code from trigger_trial_block
@@ -3416,7 +3422,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     __end__.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    read_thank_you.setSound('resource/voiceover/visual/thank_you.wav', hamming=True)
+    read_thank_you.setSound(str(voiceover_root / 'visual' / 'thank_you.wav'), hamming=True)
     read_thank_you.setVolume(1.0, log=False)
     read_thank_you.seek(0)
     # store start times for __end__

@@ -1,12 +1,12 @@
 {
   "algorithm": "Independent per-sequence Python Random Fisher-Yates shuffle; sequence seed = SHA-256(master seed + ':' + sequence_id); first 200 images assigned",
-  "assignment_csv_sha256": "622c1228d7eba63f9f3949ae08588cea9d197e9682aaa868717ffd98028281bc",
+  "assignment_csv_sha256": "ba7a2cdff57ef0a918796d8ae5da6cce979826559f5a498ccaccbb6169674bd8",
   "generated_utc": "2026-11-04T00:45:58.044511+00:00",
   "main_bank_count": 400,
   "main_distractors_per_session": 20,
   "main_rows": 4200,
   "master_seed_hex": "48c83b2f6cc00ff1cd36f08a3b345d7a5d0a3b825cc5e55494112209c5e6688e",
-  "practice_file": "stimuli/distractors/visual/practice/book.png",
+  "practice_file": "archive/runtime_assets/stimuli/distractors/visual/practice/book.png",
   "practice_is_separate_from_main_bank": true,
   "practice_sha256": "d6b494498487d32486d7289b703faab0194755250876cb18bada86026e5648d8",
   "sequence_ids": [

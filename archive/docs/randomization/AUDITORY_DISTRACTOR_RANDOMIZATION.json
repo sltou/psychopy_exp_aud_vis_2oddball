@@ -1,12 +1,12 @@
 {
   "algorithm": "Independent per-sequence Python Random Fisher-Yates shuffle; sequence seed = SHA-256(master seed + ':' + sequence_id)",
-  "assignment_csv_sha256": "049977b955b3015fb5aa7bd473fcc581c55338273c8b4769c382e7e8b802d42d",
+  "assignment_csv_sha256": "3e95c7454a5ff4c3e59d25cec5c0d37eee9b42fa77f664e7b40ee511e8119d2a",
   "generated_utc": "2026-11-04T00:45:57.912491+00:00",
   "main_bank_count": 400,
   "main_distractors_per_task_session": 20,
   "main_rows": 8400,
   "master_seed_hex": "13e52d858324ae198678f4638ac93ea30b6c8c82282a7ef8742fa85bef0ea9dd",
-  "practice_file": "stimuli/distractors/auditory/DESRA/BIRDA2.WAV",
+  "practice_file": "archive/runtime_assets/stimuli/distractors/auditory/DESRA/BIRDA2.WAV",
   "practice_sha256": "28e29a2431895f43c55c14189d50045da0f23c43d817f5e71cb3c61f404d604a",
   "sequence_ids": [
     "SEQ001",

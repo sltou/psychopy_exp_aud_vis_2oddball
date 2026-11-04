@@ -49,6 +49,14 @@ EXPECTED_PROFILE_PATTERNS = (
     "PAT07", "PAT07", "PAT06", "PAT06", "PAT05",
     "PAT07",  # TEST
 )
+ACTIVE_ROOT_ENTRIES = {
+    "allocation",
+    "archive",
+    "auditory_no_response_oddball.py",
+    "auditory_oddball_2ob.py",
+    "visual_oddball_2ob.py",
+}
+ALLOWED_LOCAL_ROOT_ENTRIES = {".git", ".gitignore", "data"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,6 +86,21 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def validate_root_layout(root: Path) -> None:
+    present = {path.name for path in root.iterdir()}
+    missing = ACTIVE_ROOT_ENTRIES - present
+    unexpected = present - ACTIVE_ROOT_ENTRIES - ALLOWED_LOCAL_ROOT_ENTRIES
+    if missing:
+        fail("Missing active root entries: {}".format(", ".join(sorted(missing))))
+    if unexpected:
+        fail(
+            "Non-deployment items remain at the project root: {}. Run "
+            "python3 archive/tools/archive_local_extras.py --apply"
+            .format(", ".join(sorted(unexpected)))
+        )
+    print("Root layout: three active tasks, allocation, and archive only")
 
 
 def validate_profiles(root: Path) -> list[dict[str, str]]:
@@ -162,8 +185,9 @@ def png_size(path: Path) -> tuple[int, int]:
 
 
 def validate_primary_stimuli(root: Path) -> None:
-    visual_root = root / "stimuli" / "visual"
-    auditory_root = root / "stimuli" / "auditory"
+    stimulus_root = root / "archive" / "runtime_assets" / "stimuli"
+    visual_root = stimulus_root / "visual"
+    auditory_root = stimulus_root / "auditory"
     visual_sets = sorted(path for path in visual_root.iterdir() if path.is_dir())
     auditory_sets = sorted(path for path in auditory_root.iterdir() if path.is_dir())
     if len(visual_sets) != 10 or len(auditory_sets) != 10:
@@ -242,6 +266,8 @@ def validate_assignment(
     for row in rows:
         relative = row["distractor_file"].strip()
         expected = row["sha256"].strip().lower()
+        if not relative.startswith("archive/runtime_assets/stimuli/distractors/"):
+            fail("Distractor path is outside archive/runtime_assets: {}".format(relative))
         if relative in expected_hash_by_file and expected_hash_by_file[relative] != expected:
             fail("Conflicting hashes for {}".format(relative))
         expected_hash_by_file[relative] = expected
@@ -258,13 +284,14 @@ def validate_assignment(
 
 
 def validate_media_banks(root: Path) -> None:
+    stimulus_root = root / "archive" / "runtime_assets" / "stimuli"
     audio = sorted(
         path
-        for path in (root / "stimuli" / "distractors" / "auditory").rglob("*")
+        for path in (stimulus_root / "distractors" / "auditory").rglob("*")
         if path.is_file() and path.suffix.lower() == ".wav"
     )
-    visual = sorted((root / "stimuli" / "distractors" / "visual" / "IMAGINE_familiar" / "png").glob("*.png"))
-    book = root / "stimuli" / "distractors" / "visual" / "practice" / "book.png"
+    visual = sorted((stimulus_root / "distractors" / "visual" / "IMAGINE_familiar" / "png").glob("*.png"))
+    book = stimulus_root / "distractors" / "visual" / "practice" / "book.png"
     if len(audio) != 401 or len(visual) != 400 or not book.is_file():
         fail("Distractor bank count mismatch")
     if any(png_size(path) != (1000, 1000) for path in visual + [book]):
@@ -296,10 +323,18 @@ def validate_scripts_and_voiceovers(root: Path) -> None:
         for value in forbidden:
             if value in source:
                 fail("{} still references outdated allocation field {}".format(filename, value))
-        referenced.update(re.findall(r"resource/voiceover/[A-Za-z0-9_./-]+\.wav", source))
+        referenced.update(
+            "archive/runtime_assets/resource/voiceover/{}/{}".format(group, filename)
+            for group, filename in re.findall(
+                r"voiceover_root\s*/\s*'([^']+)'\s*/\s*'([^']+\.wav)'",
+                source,
+            )
+        )
     voice_files = {
         path.relative_to(root).as_posix()
-        for path in (root / "resource" / "voiceover").rglob("*.wav")
+        for path in (
+            root / "archive" / "runtime_assets" / "resource" / "voiceover"
+        ).rglob("*.wav")
     }
     if len(voice_files) != 26:
         fail("Expected 26 deployed voiceovers; found {}".format(len(voice_files)))
@@ -312,9 +347,10 @@ def validate_scripts_and_voiceovers(root: Path) -> None:
 
 
 def main() -> int:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     args = parse_args()
     try:
+        validate_root_layout(root)
         profiles = validate_profiles(root)
         if args.profiles_only:
             print("Profile validation passed.")

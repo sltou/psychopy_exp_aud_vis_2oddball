@@ -17,7 +17,7 @@ The 20 enrollment rows are in a prebalanced order. Always fill from top to botto
 After editing, run:
 
 ```bash
-python3 tools/validate_deployment.py --profiles-only
+python3 archive/tools/validate_deployment.py --profiles-only
 ```
 
 ## Fixed backend files

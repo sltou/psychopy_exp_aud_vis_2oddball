@@ -7,7 +7,7 @@
 3. Find the first blank cell in the `participant_id` column, starting at `SEQ001` and moving downward.
 4. Enter the participant's study ID in that cell only. Do not edit, sort, or autofill the `sequence_id` or `pattern_id` columns.
 5. Save as CSV without changing the filename or adding another sheet.
-6. From the repository root, run `python3 tools/validate_deployment.py --profiles-only`.
+6. From the repository root, run `python3 archive/tools/validate_deployment.py --profiles-only`.
 7. Commit and push the updated `participant_profiles.csv` according to the lab's approved data-management procedure so the same enrollment table is used at later sessions.
 
 An enrolled or withdrawn ID stays on its assigned row. Never erase or reuse it. If a participant ID was entered incorrectly, correct that same cell and rerun validation; do not create a second entry.

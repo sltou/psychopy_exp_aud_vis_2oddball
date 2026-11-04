@@ -1,6 +1,6 @@
 # Instruction voiceovers
 
-All current instruction files were recorded with the macOS Samantha voice, a neutral American female English voice, at 180 words per minute. Deployment files are mono, 48 kHz, 16-bit PCM WAV. They are grouped by task under `resource/voiceover/`.
+All current instruction files were recorded with the macOS Samantha voice, a neutral American female English voice, at 180 words per minute. Deployment files are mono, 48 kHz, 16-bit PCM WAV. They are grouped by task under `archive/runtime_assets/resource/voiceover/`.
 
 The recordings communicate the following scripts; on-screen instructions in the task files use the same task rules.
 

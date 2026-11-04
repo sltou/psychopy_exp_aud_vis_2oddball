@@ -118,7 +118,7 @@ def remove_empty_directories(root: Path) -> None:
 
 def main() -> int:
     args = parse_args()
-    script_root = Path(__file__).resolve().parents[1]
+    script_root = Path(__file__).resolve().parents[2]
     try:
         root = git_root(script_root)
         extras = local_extras(root, tracked_files(root))

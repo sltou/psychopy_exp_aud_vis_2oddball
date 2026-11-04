@@ -63,4 +63,4 @@ Auditory allocation independently shuffles 400 standardized main distractor soun
 - auditory response and no-response distractors are disjoint, including within a session;
 - no visual main distractor repeats across the 10 visual tasks.
 
-The 20 enrollment sequences plus `TEST` each have independent deterministic shuffles. Assignment rows include SHA-256 hashes, and the task verifies each selected file before presentation. Randomization metadata and seeds are retained under `docs/randomization/`.
+The 20 enrollment sequences plus `TEST` each have independent deterministic shuffles. Assignment rows include SHA-256 hashes, and the task verifies each selected file before presentation. Randomization metadata and seeds are retained under `archive/docs/randomization/`.
