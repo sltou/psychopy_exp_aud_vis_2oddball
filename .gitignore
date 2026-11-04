@@ -4,6 +4,9 @@
 # Data folder
 data/
 
+# Recoverable local files moved aside by the archive helper
+archive/local_extras_*/
+
 # MacOS Finder
 .DS_Store
 ._.DS_Store

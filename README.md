@@ -38,7 +38,23 @@ Use the PsychoPy version and lab hardware configuration already established on t
 
 At launch, enter the participant ID exactly as recorded in `participant_profiles.csv` and enter session `1` through `10`. Each script resolves and validates its stimulus set and distractor files before continuing.
 
-Do not open, save, or regenerate the Builder files on a computer with a different PsychoPy version. The `.psyexp` files in `builder_sources/` are retained as structural source references; the deployed `.py` files contain the current allocation logic.
+Do not open, save, or regenerate the Builder files on a computer with a different PsychoPy version. The `.psyexp` files in `archive/builder_sources/` are retained only as structural source references; the deployed `.py` files contain the current allocation logic.
+
+## Clean an existing experiment computer
+
+Switching branches removes tracked files, but Git deliberately leaves old untracked and ignored files in place. To identify those local leftovers without touching participant results, run:
+
+```bash
+python3 tools/archive_local_extras.py
+```
+
+The default is preview-only. Review the list, then move the listed files into a timestamped, recoverable local archive:
+
+```bash
+python3 tools/archive_local_extras.py --apply
+```
+
+The utility never deletes files and never touches `.git/`, `data/`, or anything already under `archive/`. It preserves each file's original relative path inside `archive/local_extras_<timestamp>/`. These local archive folders are ignored by Git.
 
 ## Preflight validation
 
@@ -59,7 +75,7 @@ The first command is the quick check after enrollment edits. The second verifies
 - `stimuli/distractors/` — auditory distractors, 400 familiar-object images, and practice assets
 - `resource/voiceover/` — task-specific neutral American female instruction recordings
 - `docs/` — protocol, CRC workflow, voiceover record, and randomization records
-- `builder_sources/` — preserved Builder source references
+- `archive/builder_sources/` — non-runtime Builder source references retained for future redevelopment
 - `tools/` — read-only deployment validation
 
 ## Trigger codes
