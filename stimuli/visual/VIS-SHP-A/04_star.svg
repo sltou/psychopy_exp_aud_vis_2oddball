@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black five-point star</title>
+  <polygon points="500,100 638.564064606,309.282926650 880.422606518,376.393202250 724.201366151,572.847439785 735.114100917,823.606797750 500,735.739267130 264.885899083,823.606797750 275.798633849,572.847439785 119.577393482,376.393202250 361.435935394,309.282926650" fill="#000000"/>
+</svg>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black uppercase letter E</title>
+  <path d="M149 0V1466H1236V1218H445V893H1181V646H445V247H1264V0Z"
+        transform="matrix(0.488400488400 0 0 -0.488400488400 166.422466422466 828.205128205128)"
+        fill="#000000"/>
+</svg>

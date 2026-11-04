@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black digit 1</title>
+  <path d="M806 0H525V1059Q371 915 162 846V1101Q272 1137 401.0 1237.5Q530 1338 578 1472H806Z"
+        transform="matrix(0.534045393858 0 0 -0.534045393858 195.861148197597 886.114819759680)"
+        fill="#000000"/>
+</svg>

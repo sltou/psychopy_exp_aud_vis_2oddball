@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black uppercase letter U</title>
+  <path d="M147 1466H443V672Q443 483 454 427Q473 337 544.5 282.5Q616 228 740 228Q866 228 930.0 279.5Q994 331 1007.0 406.0Q1020 481 1020 655V1466H1316V696Q1316 432 1292.0 323.0Q1268 214 1203.5 139.0Q1139 64 1031.0 19.5Q923 -25 749 -25Q539 -25 430.5 23.5Q322 72 259.0 149.5Q196 227 176 312Q147 438 147 684Z"
+        transform="matrix(0.488400488400 0 0 -0.488400488400 138.827838827839 828.205128205128)"
+        fill="#000000"/>
+</svg>

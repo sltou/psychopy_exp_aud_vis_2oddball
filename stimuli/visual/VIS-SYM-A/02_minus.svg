@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black minus symbol</title>
+  <path d="M85 592V855H1110V592Z"
+        transform="matrix(0.780487804878 0 0 -0.780487804878 33.658536585366 1064.682926829268)"
+        fill="#000000"/>
+</svg>

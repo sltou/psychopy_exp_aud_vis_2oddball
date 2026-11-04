@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black uppercase letter T</title>
+  <path d="M479 0V1218H44V1466H1209V1218H775V0Z"
+        transform="matrix(0.488400488400 0 0 -0.488400488400 194.505494505495 828.205128205128)"
+        fill="#000000"/>
+</svg>

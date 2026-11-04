@@ -29,6 +29,9 @@ from numpy import (sin, cos, tan, log, log10, pi, average,
 from numpy.random import random, randint, normal, shuffle, choice as randchoice
 import os  # handy system and path functions
 import sys  # to get file system encoding
+import csv
+import hashlib
+from pathlib import Path
 
 import psychopy.iohub as io
 from psychopy.hardware import keyboard
@@ -126,8 +129,8 @@ psychopyVersion = '2024.2.2a1'
 expName = 'auditory_oddball_2ob'  # from the Builder filename that created this script
 # information about this experiment
 expInfo = {
-    'participant': f"{randint(0, 999999):06.0f}",
-    'session': '001',
+    'subject_id': '',
+    'session': '01',
     'date|hid': data.getDateStr(),
     'expName|hid': expName,
     'psychopyVersion|hid': psychopyVersion,
@@ -171,6 +174,22 @@ def showExpInfoDlg(expInfo):
     )
     if dlg.OK == False:
         core.quit()  # user pressed cancel
+    subject_id = str(expInfo.get('subject_id', '')).strip()
+    try:
+        session_number = int(str(expInfo.get('session', '')).strip())
+    except ValueError:
+        session_number = 0
+    if not subject_id or session_number not in range(1, 11):
+        errorDlg = gui.Dlg(title='Invalid study information', alwaysOnTop=True)
+        errorDlg.addText(
+            'Enter a non-empty subject ID and a session number from 1 to 10.'
+        )
+        errorDlg.show()
+        core.quit()
+    # Preserve the conventional PsychoPy participant field in saved output.
+    expInfo['subject_id'] = subject_id
+    expInfo['participant'] = subject_id
+    expInfo['session'] = f"{session_number:02d}"
     # return expInfo
     return expInfo
 
@@ -199,7 +218,7 @@ def setupData(expInfo, dataDir=None):
     # data file name stem = absolute path + name; later add .psyexp, .csv, .log, etc
     if dataDir is None:
         dataDir = _thisDir
-    filename = u'data/%s/%s_%s_%s' % (expInfo['participant'], expInfo['participant'], expName, expInfo['session'])
+    filename = u'data/%s/%s_%s_%s' % (expInfo['subject_id'], expInfo['subject_id'], expName, expInfo['session'])
     # make sure filename is relative to dataDir
     if os.path.isabs(filename):
         dataDir = os.path.commonprefix([dataDir, filename])
@@ -587,7 +606,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     
     # --- Initialize components for Routine "_welcome" ---
     text_welcome = visual.TextStim(win=win, name='text_welcome',
-        text='Welcome! This task will take approximately 10 minutes.\n\nPlease take a moment to adjust the chair height, chin rest, and sitting posture. Make sure that you feel comfortable and can stay still for a while.\n\n\nWhen you are ready, press any of the white keys to begin.',
+        text='Welcome. In this auditory response task, press the Green key as quickly as possible only when the TARGET sound occurs. Do not respond to the STANDARD sound or to distractor sounds. The target and standard change at the start of each block. You will close your eyes during each block. Press any white key to review the examples.',
         font='Arial',
         units='norm', pos=(0, 0), draggable=False, height=0.1, wrapWidth=1.8, ori=0.0, 
         color='white', colorSpace='rgb', opacity=None, 
@@ -632,60 +651,378 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     # Run 'Begin Experiment' code from condition_setup
     import numpy as np
     
-    # --- Stimulus definitions ---
-    # (frequency, type) for each stimulus category
-    regular_frequency = 880
-    oddball_frequency = 440
-    distractor_frequency = 1150
+    TASK_MODE = 'AUR'
+    SCHEDULE_COLUMN = 'auditory_response_stimulus_id'
     
-    STIMULI = {
-        "regular":   {"frequency": regular_frequency, "text": "second tone"},
-        "oddball":    {"frequency": oddball_frequency, "text": "first tone"},
-        "distractor": {"frequency": distractor_frequency, "text": "third tone"},
-    }
+    def configuration_error(message):
+        full_message = 'Auditory task configuration error: ' + str(message)
+        logging.error(full_message)
+        raise RuntimeError(full_message)
     
-    # --- Timing ---
-    STIMULUS_DURATION = 0.2
-    ITI_RANGE         = (1.5, 2.5)  # seconds
+    def read_csv_rows(csv_path):
+        try:
+            with csv_path.open('r', encoding='utf-8-sig', newline='') as csv_file:
+                return list(csv.DictReader(csv_file))
+        except Exception as err:
+            configuration_error(
+                'Could not read {} ({})'.format(csv_path, err)
+            )
     
-    # --- Trial counts ---
-    N_CHUNKS = 20  # chunks × 10 trials = 200 trials total
-    N_TRIALS = N_CHUNKS * 10  # 160 standard, 20 oddball, 20 distractor per experiment
+    def field(row, *names):
+        for name in names:
+            value = row.get(name, '')
+            if value is not None and str(value).strip():
+                return str(value).strip()
+        return ''
     
-    # --- Build trial sequence ---
-    # Each 10-trial chunk:
-    #   Position 0 : always standard (no oddball/distractor as first trial)
-    #   Positions 1–9 : 7× standard + 1× oddball + 1× distractor, shuffled together
-    
-    trial_frequencies = []
-    trial_types = []
-    
-    for _ in range(N_CHUNKS):
-        inner = (
-            [("regular",   STIMULI["regular"]["frequency"])]   * 7
-          + [("oddball",    STIMULI["oddball"]["frequency"])]     * 1
-          + [("distractor", STIMULI["distractor"]["frequency"])] * 1
+    def integer_field(row, *names):
+        try:
+            return int(field(row, *names))
+        except (TypeError, ValueError):
+            return None
+
+    # Find the portable stimulus package without using a computer-specific
+    # absolute path. A task computer may instead set ODDBALL_STUDY_ROOT.
+    script_path = Path(_thisDir).resolve()
+    root_candidates = []
+    configured_root = os.environ.get('ODDBALL_STUDY_ROOT', '').strip()
+    if configured_root:
+        root_candidates.append(Path(configured_root).expanduser())
+    root_candidates.append(script_path)
+    for parent in [script_path] + list(script_path.parents):
+        root_candidates.append(parent / 'oddball_10_session')
+
+    study_root = None
+    seen_roots = set()
+    for candidate in root_candidates:
+        candidate = candidate.resolve()
+        if str(candidate) in seen_roots:
+            continue
+        seen_roots.add(str(candidate))
+        if (
+            (candidate / 'allocation' / 'participant_profiles.csv').is_file()
+            and (candidate / 'allocation' / 'pattern_visit_schedule.csv').is_file()
+            and (candidate / 'stimuli' / 'auditory').is_dir()
+        ):
+            study_root = candidate
+            break
+    if study_root is None:
+        configuration_error(
+            'Could not find the deployment allocation and stimulus folders. '
+            'Keep them beside this task or set ODDBALL_STUDY_ROOT.'
         )
-        np.random.shuffle(inner)
-    
-        chunk = [("regular", STIMULI["regular"]["frequency"])] + inner
-    
-        types, freqs = zip(*chunk)
-        trial_types       += list(types)
-        trial_frequencies += list(freqs)
-    
-    # --- Verification ---
-    assert len(trial_types) == N_TRIALS
-    assert trial_types.count("regular")    == 160
-    assert trial_types.count("oddball")    == 20
-    assert trial_types.count("distractor") == 20
-    
-    # --- ITI list (includes stimulus duration as onset offset) ---
-    iti_list = list(
-        ITI_RANGE[0]
-        + np.random.random(N_TRIALS) * (ITI_RANGE[1] - ITI_RANGE[0])
-        + STIMULUS_DURATION
+
+    # participant_id -> sequence_id/pattern_id -> session stimulus IDs.
+    subject_id = str(expInfo['subject_id']).strip()
+    session_number = int(expInfo['session'])
+    allocation_dir = study_root / 'allocation'
+    profiles_path = allocation_dir / 'participant_profiles.csv'
+    profile_matches = [
+        row for row in read_csv_rows(profiles_path)
+        if field(row, 'participant_id', 'subject_id') == subject_id
+    ]
+    if len(profile_matches) != 1:
+        configuration_error(
+            'Expected one participant profile for {!r}; found {}. The CRC '
+            'must enter the ID once in participant_profiles.csv.'
+            .format(subject_id, len(profile_matches))
+        )
+    profile_row = profile_matches[0]
+    sequence_id = field(profile_row, 'sequence_id')
+    pattern_id = field(profile_row, 'pattern_id')
+    if not sequence_id or not pattern_id:
+        configuration_error('Participant profile is missing sequence_id or pattern_id.')
+
+    schedule_path = allocation_dir / 'pattern_visit_schedule.csv'
+    schedule_matches = [
+        row for row in read_csv_rows(schedule_path)
+        if field(row, 'pattern_id') == pattern_id
+        and integer_field(row, 'session', 'visit') == session_number
+    ]
+    if len(schedule_matches) != 1:
+        configuration_error(
+            'Expected one schedule row for pattern {} session {}; found {}.'
+            .format(pattern_id, session_number, len(schedule_matches))
+        )
+    schedule_row = schedule_matches[0]
+    auditory_stimulus_id = field(schedule_row, SCHEDULE_COLUMN)
+    if not auditory_stimulus_id.startswith('AUD-'):
+        configuration_error(
+            '{} contains invalid stimulus ID {!r}.'
+            .format(SCHEDULE_COLUMN, auditory_stimulus_id)
+        )
+    auditory_no_response_id = field(
+        schedule_row, 'auditory_no_response_stimulus_id'
     )
+    if not auditory_no_response_id.startswith('AUD-'):
+        configuration_error(
+            'auditory_no_response_stimulus_id contains invalid value {!r}.'
+            .format(auditory_no_response_id)
+        )
+    if auditory_no_response_id == auditory_stimulus_id:
+        configuration_error(
+            'AUR and AUN cannot use the same stimulus ID in the same session.'
+        )
+
+    # The five numbered WAVs define Blocks 1-5. Targets are 1,2,3,4,5;
+    # standards are the +2 rotation 3,4,5,1,2.
+    primary_folder = study_root / 'stimuli' / 'auditory' / auditory_stimulus_id
+    primary_files = sorted(
+        path for path in primary_folder.glob('*.wav') if path.is_file()
+    ) if primary_folder.is_dir() else []
+    if len(primary_files) != 5:
+        configuration_error(
+            '{} must contain exactly five WAV files; found {}.'
+            .format(primary_folder, len(primary_files))
+        )
+    for item_number, primary_file in enumerate(primary_files, start=1):
+        if not primary_file.name.startswith('{:02d}_'.format(item_number)):
+            configuration_error(
+                'Expected WAV prefixes 01_ through 05_; found {}.'
+                .format(primary_file.name)
+            )
+    block_target_files = list(primary_files)
+    block_standard_files = primary_files[2:] + primary_files[:2]
+
+    # Main distractor rows use:
+    # sequence_id, session, task, phase, block,
+    # distractor_slot, distractor_id, distractor_file, sha256.
+    distractor_csv = allocation_dir / 'auditory_distractor_assignments.csv'
+    if not distractor_csv.is_file():
+        configuration_error('Missing {}.'.format(distractor_csv))
+    distractor_rows = read_csv_rows(distractor_csv)
+
+    def normalized_task(row):
+        value = field(row, 'task', 'task_mode').upper().replace('-', '_')
+        aliases = {
+            'AUDITORY_RESPONSE': 'AUR',
+            'RESPONSE': 'AUR',
+            'AUDITORY_NO_RESPONSE': 'AUN',
+            'NO_RESPONSE': 'AUN',
+        }
+        return aliases.get(value, value)
+
+    subject_main_rows = [
+        row for row in distractor_rows
+        if field(row, 'sequence_id') == sequence_id
+        and field(row, 'phase').lower() in ('', 'main')
+        and normalized_task(row) in ('AUR', 'AUN')
+    ]
+    all_subject_files = [
+        field(row, 'distractor_file', 'stimulus_file', 'file')
+        for row in subject_main_rows
+    ]
+    all_subject_hashes = [
+        field(row, 'sha256').lower() for row in subject_main_rows
+    ]
+    if len(subject_main_rows) != 400:
+        configuration_error(
+            'Expected 400 main distractor rows (200 AUR + 200 AUN) for {}; '
+            'found {}.'.format(subject_id, len(subject_main_rows))
+        )
+    if sum(normalized_task(row) == 'AUR' for row in subject_main_rows) != 200:
+        configuration_error('Expected 200 AUR distractor rows for this subject.')
+    if sum(normalized_task(row) == 'AUN' for row in subject_main_rows) != 200:
+        configuration_error('Expected 200 AUN distractor rows for this subject.')
+    if any(not value for value in all_subject_files):
+        configuration_error('A main distractor row has no distractor_file.')
+    if len(all_subject_files) != len(set(all_subject_files)):
+        configuration_error(
+            'A distractor repeats in this participant\'s AUR/AUN allocation.'
+        )
+    if any(not value for value in all_subject_hashes):
+        configuration_error('Every main distractor row must contain sha256.')
+    if len(all_subject_hashes) != len(set(all_subject_hashes)):
+        configuration_error(
+            'Two assigned distractor files have identical audio content '
+            '(duplicate sha256) for this participant.'
+        )
+    session_rows = [
+        row for row in subject_main_rows
+        if normalized_task(row) == TASK_MODE
+        and integer_field(row, 'session', 'visit') == session_number
+    ]
+    if len(session_rows) != 20:
+        configuration_error(
+            'Expected 20 {} distractors for {} session {}; found {}.'
+            .format(TASK_MODE, subject_id, session_number, len(session_rows))
+        )
+
+    def resolve_media(relative_value):
+        relative_path = Path(relative_value)
+        if relative_path.is_absolute() or '..' in relative_path.parts:
+            configuration_error(
+                'Distractor paths must be relative: {}'.format(relative_value)
+            )
+        candidates = [
+            study_root / relative_path,
+            study_root / 'stimuli' / 'distractors' / 'auditory' / relative_path,
+        ]
+        for media_path in candidates:
+            if media_path.is_file():
+                return media_path.resolve()
+        configuration_error('Missing distractor WAV: {}'.format(relative_value))
+
+    def media_sha256(media_path):
+        digest = hashlib.sha256()
+        with media_path.open('rb') as media_file:
+            for chunk in iter(lambda: media_file.read(1024 * 1024), b''):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    distractors_by_block = {block: [] for block in range(1, 6)}
+    for row in session_rows:
+        block_number = integer_field(row, 'block')
+        slot_number = integer_field(row, 'distractor_slot', 'chunk', 'slot')
+        if block_number not in distractors_by_block or slot_number not in range(1, 5):
+            configuration_error(
+                'Main distractors require block 1-5 and distractor_slot 1-4.'
+            )
+        distractor_path = resolve_media(
+            field(row, 'distractor_file', 'stimulus_file', 'file')
+        )
+        expected_sha256 = field(row, 'sha256').lower()
+        if media_sha256(distractor_path) != expected_sha256:
+            configuration_error(
+                'SHA-256 mismatch for {}.'.format(distractor_path)
+            )
+        distractors_by_block[block_number].append({
+            'slot': slot_number,
+            'id': field(row, 'distractor_id', 'stimulus_id') or distractor_path.stem,
+            'file': distractor_path,
+            'relative_file': distractor_path.relative_to(study_root).as_posix(),
+            'sha256': expected_sha256,
+        })
+    for block_number in distractors_by_block:
+        distractors_by_block[block_number].sort(key=lambda item: item['slot'])
+        slots = [item['slot'] for item in distractors_by_block[block_number]]
+        if slots != [1, 2, 3, 4]:
+            configuration_error(
+                'Block {} must contain distractor slots 1,2,3,4 exactly once.'
+                .format(block_number)
+            )
+
+    practice_rows = [
+        row for row in distractor_rows
+        if field(row, 'phase').lower() == 'practice'
+        and normalized_task(row) in ('', TASK_MODE)
+    ]
+    if len(practice_rows) != 1:
+        configuration_error(
+            'The distractor CSV must contain exactly one AUR practice row.'
+        )
+    practice_distractor_file = resolve_media(
+        field(practice_rows[0], 'distractor_file', 'stimulus_file', 'file')
+    )
+    practice_sha256 = field(practice_rows[0], 'sha256').lower()
+    if not practice_sha256:
+        configuration_error('The practice distractor row must contain sha256.')
+    if practice_distractor_file.relative_to(study_root).as_posix() in set(all_subject_files):
+        configuration_error(
+            'The practice distractor is also assigned as a main distractor.'
+        )
+    if practice_sha256 in set(all_subject_hashes):
+        configuration_error(
+            'The practice distractor duplicates a main distractor by sha256.'
+        )
+    if media_sha256(practice_distractor_file) != practice_sha256.lower():
+        configuration_error(
+            'SHA-256 mismatch for practice distractor {}.'
+            .format(practice_distractor_file)
+        )
+
+    expInfo['task_mode'] = TASK_MODE
+    expInfo['sequence_id'] = sequence_id
+    expInfo['pattern_id'] = pattern_id
+    expInfo['auditory_stimulus_id'] = auditory_stimulus_id
+    expInfo['auditory_response_stimulus_id'] = auditory_stimulus_id
+    expInfo['auditory_no_response_stimulus_id'] = auditory_no_response_id
+
+    # The existing instruction/practice routines demonstrate Block 1.
+    regular_file = str(block_standard_files[0])
+    oddball_file = str(block_target_files[0])
+    distractor_file = str(practice_distractor_file)
+    STIMULI = {
+        'regular': {'file': regular_file, 'text': 'second tone'},
+        'oddball': {'file': oddball_file, 'text': 'first tone'},
+        'distractor': {'file': distractor_file, 'text': 'third tone'},
+    }
+
+    STIMULUS_DURATION = 0.25
+    ITI_RANGE = (1.5, 2.5)
+    N_BLOCKS = 5
+    CHUNKS_PER_BLOCK = 4
+    TRIALS_PER_CHUNK = 10
+    TRIALS_PER_BLOCK = CHUNKS_PER_BLOCK * TRIALS_PER_CHUNK
+    N_TRIALS = N_BLOCKS * TRIALS_PER_BLOCK
+
+    # Build five independent 40-trial blocks. Each 10-trial chunk begins with
+    # a standard; the remaining 7 standards, 1 target, and 1 unique distractor
+    # are shuffled within that chunk.
+    block_trial_plans = []
+    for block_number in range(1, N_BLOCKS + 1):
+        target_path = block_target_files[block_number - 1]
+        standard_path = block_standard_files[block_number - 1]
+        block_plan = []
+        for chunk_number in range(1, CHUNKS_PER_BLOCK + 1):
+            distractor = distractors_by_block[block_number][chunk_number - 1]
+            standard_trial = {
+                'trial_type': 'regular',
+                'stimulus_file': str(standard_path),
+                'stimulus_relative_file': standard_path.relative_to(study_root).as_posix(),
+                'distractor_id': '',
+                'distractor_sha256': '',
+                'distractor_slot': '',
+            }
+            target_trial = {
+                'trial_type': 'oddball',
+                'stimulus_file': str(target_path),
+                'stimulus_relative_file': target_path.relative_to(study_root).as_posix(),
+                'distractor_id': '',
+                'distractor_sha256': '',
+                'distractor_slot': '',
+            }
+            distractor_trial = {
+                'trial_type': 'distractor',
+                'stimulus_file': str(distractor['file']),
+                'stimulus_relative_file': distractor['relative_file'],
+                'distractor_id': distractor['id'],
+                'distractor_sha256': distractor['sha256'],
+                'distractor_slot': distractor['slot'],
+            }
+            inner = (
+                [dict(standard_trial) for _ in range(7)]
+                + [target_trial, distractor_trial]
+            )
+            np.random.shuffle(inner)
+            chunk = [dict(standard_trial)] + inner
+            for trial_in_chunk, trial_spec in enumerate(chunk, start=1):
+                trial_spec.update({
+                    'block': block_number,
+                    'chunk': chunk_number,
+                    'trial_in_chunk': trial_in_chunk,
+                    'trial_in_block': (
+                        (chunk_number - 1) * TRIALS_PER_CHUNK + trial_in_chunk
+                    ),
+                    'target_relative_file': target_path.relative_to(study_root).as_posix(),
+                    'standard_relative_file': standard_path.relative_to(study_root).as_posix(),
+                    'iti': (
+                        ITI_RANGE[0]
+                        + np.random.random() * (ITI_RANGE[1] - ITI_RANGE[0])
+                        + STIMULUS_DURATION
+                    ),
+                })
+                block_plan.append(trial_spec)
+        assert len(block_plan) == TRIALS_PER_BLOCK
+        assert sum(item['trial_type'] == 'regular' for item in block_plan) == 32
+        assert sum(item['trial_type'] == 'oddball' for item in block_plan) == 4
+        assert sum(item['trial_type'] == 'distractor' for item in block_plan) == 4
+        block_trial_plans.append(block_plan)
+    assert len({
+        item['stimulus_relative_file']
+        for block_plan in block_trial_plans for item in block_plan
+        if item['trial_type'] == 'distractor'
+    }) == 20
     
     
     # --- Initialize components for Routine "instruct_oddball" ---
@@ -716,7 +1053,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         depth=0.0);
     sound_oddball = sound.Sound(
         'A', 
-        secs=0.2, 
+        secs=0.25,
         stereo=True, 
         hamming=True, 
         speaker='sound_oddball',    name='sound_oddball'
@@ -751,7 +1088,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         depth=0.0);
     sound_regular = sound.Sound(
         'A', 
-        secs=0.2, 
+        secs=0.25,
         stereo=True, 
         hamming=True, 
         speaker='sound_regular',    name='sound_regular'
@@ -786,7 +1123,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         depth=0.0);
     sound_distractor = sound.Sound(
         'A', 
-        secs=0.2, 
+        secs=0.25,
         stereo=True, 
         hamming=True, 
         speaker='sound_distractor',    name='sound_distractor'
@@ -821,7 +1158,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         depth=0.0);
     sound_oddball_combined = sound.Sound(
         'A', 
-        secs=0.2, 
+        secs=0.25,
         stereo=True, 
         hamming=True, 
         speaker='sound_oddball_combined',    name='sound_oddball_combined'
@@ -829,7 +1166,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     sound_oddball_combined.setVolume(1.0)
     sound_regular_combined = sound.Sound(
         'A', 
-        secs=0.2, 
+        secs=0.25,
         stereo=True, 
         hamming=True, 
         speaker='sound_regular_combined',    name='sound_regular_combined'
@@ -837,7 +1174,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     sound_regular_combined.setVolume(1.0)
     sound_distractor_combined = sound.Sound(
         'A', 
-        secs=0.2, 
+        secs=0.25,
         stereo=True, 
         hamming=True, 
         speaker='sound_distractor_combined',    name='sound_distractor_combined'
@@ -900,7 +1237,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     # --- Initialize components for Routine "trial" ---
     sound_tone = sound.Sound(
         'A', 
-        secs=0.2, 
+        secs=0.25,
         stereo=True, 
         hamming=True, 
         speaker='sound_tone',    name='sound_tone'
@@ -910,7 +1247,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     
     # --- Initialize components for Routine "__end__" ---
     text_thank_you = visual.TextStim(win=win, name='text_thank_you',
-        text='Thank you. You have completed this task!',
+        text='Thank you. You have completed the auditory response task.',
         font='Arial',
         units='norm', pos=(0, 0), draggable=False, height=0.1, wrapWidth=1.8, ori=0.0, 
         color='white', colorSpace='rgb', opacity=None, 
@@ -966,7 +1303,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     key_welcome.keys = []
     key_welcome.rt = []
     _key_welcome_allKeys = []
-    read_welcome.setSound('resource/welcome.wav', hamming=True)
+    read_welcome.setSound('resource/voiceover/auditory_response/welcome.wav', hamming=True)
     read_welcome.setVolume(1.0, log=False)
     read_welcome.seek(0)
     # store start times for _welcome
@@ -1197,12 +1534,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     instruct_oddball.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    text_instruct_oddball.setText("In this task you will hear a series of tones. \n \n There are three different tones. Every time you hear the following tone, the " + STIMULI["oddball"]["text"] + ", respond by pressing the Green key.\n \nNow press any of the white keys to hear the tone.")
+    text_instruct_oddball.setText("TARGET SOUND\n\nPress the Green key whenever the TARGET sound occurs.\n\nPress any white key to hear the example.")
     # create starting attributes for key_instruct_oddball
     key_instruct_oddball.keys = []
     key_instruct_oddball.rt = []
     _key_instruct_oddball_allKeys = []
-    read_instruct_oddball.setSound('resource/instruct_oddball_auditory.wav', hamming=True)
+    read_instruct_oddball.setSound('resource/voiceover/auditory_response/target.wav', hamming=True)
     read_instruct_oddball.setVolume(1.0, log=False)
     read_instruct_oddball.seek(0)
     # store start times for instruct_oddball
@@ -1353,7 +1690,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     tone_oddball.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    sound_oddball.setSound(oddball_frequency, secs=0.2, hamming=True)
+    sound_oddball.setSound(oddball_file, secs=STIMULUS_DURATION, hamming=False)
     sound_oddball.setVolume(1.0, log=False)
     sound_oddball.seek(0)
     # store start times for tone_oddball
@@ -1430,7 +1767,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         # if sound_oddball is stopping this frame...
         if sound_oddball.status == STARTED:
             # is it time to stop? (based on global clock, using actual start)
-            if tThisFlipGlobal > sound_oddball.tStartRefresh + 0.2-frameTolerance or sound_oddball.isFinished:
+            if tThisFlipGlobal > sound_oddball.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_oddball.isFinished:
                 # keep track of stop time/frame for later
                 sound_oddball.tStop = t  # not accounting for scr refresh
                 sound_oddball.tStopRefresh = tThisFlipGlobal  # on global time
@@ -1495,12 +1832,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     instruct_regular.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    text_instruct_regular.setText("Every time you hear the following tone, the " + STIMULI["regular"]["text"] + ", don't press any key.\n \nYou do not need to make any response.\n \nNow press any of the white keys to hear the tone.")
+    text_instruct_regular.setText("STANDARD SOUND\n\nDo not press any response key when the STANDARD sound occurs.\n\nPress any white key to hear the example.")
     # create starting attributes for key_instruct_regular
     key_instruct_regular.keys = []
     key_instruct_regular.rt = []
     _key_instruct_regular_allKeys = []
-    read_instruct_regular.setSound('resource/instruct_regular_auditory.wav', hamming=True)
+    read_instruct_regular.setSound('resource/voiceover/auditory_response/standard.wav', hamming=True)
     read_instruct_regular.setVolume(1.0, log=False)
     read_instruct_regular.seek(0)
     # store start times for instruct_regular
@@ -1651,7 +1988,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     tone_regular.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    sound_regular.setSound(regular_frequency, secs=0.2, hamming=True)
+    sound_regular.setSound(regular_file, secs=STIMULUS_DURATION, hamming=False)
     sound_regular.setVolume(1.0, log=False)
     sound_regular.seek(0)
     # store start times for tone_regular
@@ -1728,7 +2065,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         # if sound_regular is stopping this frame...
         if sound_regular.status == STARTED:
             # is it time to stop? (based on global clock, using actual start)
-            if tThisFlipGlobal > sound_regular.tStartRefresh + 0.2-frameTolerance or sound_regular.isFinished:
+            if tThisFlipGlobal > sound_regular.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_regular.isFinished:
                 # keep track of stop time/frame for later
                 sound_regular.tStop = t  # not accounting for scr refresh
                 sound_regular.tStopRefresh = tThisFlipGlobal  # on global time
@@ -1793,12 +2130,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     instruct_distractor.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    text_instruct_distractor.setText("Every time you hear the following tone, the " + STIMULI["distractor"]["text"] + ", don't press any key.\n \nYou do not need to make any response.\n \nNow press any of the white keys to hear the tone.")
+    text_instruct_distractor.setText("DISTRACTOR SOUND\n\nDo not press any response key when a distractor sound occurs.\n\nPress any white key to hear the example.")
     # create starting attributes for key_instruct_distractor
     key_instruct_distractor.keys = []
     key_instruct_distractor.rt = []
     _key_instruct_distractor_allKeys = []
-    read_instruct_distractor.setSound('resource/instruct_distractor_auditory.wav', hamming=True)
+    read_instruct_distractor.setSound('resource/voiceover/auditory_response/distractor.wav', hamming=True)
     read_instruct_distractor.setVolume(1.0, log=False)
     read_instruct_distractor.seek(0)
     # store start times for instruct_distractor
@@ -1949,7 +2286,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     tone_distractor.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    sound_distractor.setSound(distractor_frequency, secs=0.2, hamming=True)
+    sound_distractor.setSound(distractor_file, secs=STIMULUS_DURATION, hamming=False)
     sound_distractor.setVolume(1.0, log=False)
     sound_distractor.seek(0)
     # store start times for tone_distractor
@@ -2026,7 +2363,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         # if sound_distractor is stopping this frame...
         if sound_distractor.status == STARTED:
             # is it time to stop? (based on global clock, using actual start)
-            if tThisFlipGlobal > sound_distractor.tStartRefresh + 0.2-frameTolerance or sound_distractor.isFinished:
+            if tThisFlipGlobal > sound_distractor.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_distractor.isFinished:
                 # keep track of stop time/frame for later
                 sound_distractor.tStop = t  # not accounting for scr refresh
                 sound_distractor.tStopRefresh = tThisFlipGlobal  # on global time
@@ -2116,12 +2453,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         instruct_combined.status = NOT_STARTED
         continueRoutine = True
         # update component parameters for each repeat
-        text_instruct_combined.setText("Now we will hear all the three tones again.\n \nPay attention and decide which tone you need to respond to:\n \nis it the " + STIMULI['oddball']['text'] + ", the " + STIMULI['regular']['text'] + ", or the " + STIMULI['distractor']['text'] + "?\n \nPress any of the white keys to hear the three tones together.")
+        text_instruct_combined.setText("Review the TARGET, STANDARD, and distractor sounds.\n\nPress the Green key only for the TARGET sound. Do not respond to the STANDARD or distractor.\n\nPress any white key to hear the examples.")
         # create starting attributes for key_instruct_combined
         key_instruct_combined.keys = []
         key_instruct_combined.rt = []
         _key_instruct_combined_allKeys = []
-        read_instruct_combined.setSound('resource/instruct_combined_auditory.wav', hamming=True)
+        read_instruct_combined.setSound('resource/voiceover/auditory_response/combined.wav', hamming=True)
         read_instruct_combined.setVolume(1.0, log=False)
         read_instruct_combined.seek(0)
         # store start times for instruct_combined
@@ -2274,13 +2611,13 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         tone_combined.status = NOT_STARTED
         continueRoutine = True
         # update component parameters for each repeat
-        sound_oddball_combined.setSound(oddball_frequency, secs=0.2, hamming=True)
+        sound_oddball_combined.setSound(oddball_file, secs=STIMULUS_DURATION, hamming=False)
         sound_oddball_combined.setVolume(1.0, log=False)
         sound_oddball_combined.seek(0)
-        sound_regular_combined.setSound(regular_frequency, secs=0.2, hamming=True)
+        sound_regular_combined.setSound(regular_file, secs=STIMULUS_DURATION, hamming=False)
         sound_regular_combined.setVolume(1.0, log=False)
         sound_regular_combined.seek(0)
-        sound_distractor_combined.setSound(distractor_frequency, secs=0.2, hamming=True)
+        sound_distractor_combined.setSound(distractor_file, secs=STIMULUS_DURATION, hamming=False)
         sound_distractor_combined.setVolume(1.0, log=False)
         sound_distractor_combined.seek(0)
         # store start times for tone_combined
@@ -2360,7 +2697,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             # if sound_oddball_combined is stopping this frame...
             if sound_oddball_combined.status == STARTED:
                 # is it time to stop? (based on global clock, using actual start)
-                if tThisFlipGlobal > sound_oddball_combined.tStartRefresh + 0.2-frameTolerance or sound_oddball_combined.isFinished:
+                if tThisFlipGlobal > sound_oddball_combined.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_oddball_combined.isFinished:
                     # keep track of stop time/frame for later
                     sound_oddball_combined.tStop = t  # not accounting for scr refresh
                     sound_oddball_combined.tStopRefresh = tThisFlipGlobal  # on global time
@@ -2384,7 +2721,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             # if sound_regular_combined is stopping this frame...
             if sound_regular_combined.status == STARTED:
                 # is it time to stop? (based on global clock, using actual start)
-                if tThisFlipGlobal > sound_regular_combined.tStartRefresh + 0.2-frameTolerance or sound_regular_combined.isFinished:
+                if tThisFlipGlobal > sound_regular_combined.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_regular_combined.isFinished:
                     # keep track of stop time/frame for later
                     sound_regular_combined.tStop = t  # not accounting for scr refresh
                     sound_regular_combined.tStopRefresh = tThisFlipGlobal  # on global time
@@ -2408,7 +2745,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             # if sound_distractor_combined is stopping this frame...
             if sound_distractor_combined.status == STARTED:
                 # is it time to stop? (based on global clock, using actual start)
-                if tThisFlipGlobal > sound_distractor_combined.tStartRefresh + 0.2-frameTolerance or sound_distractor_combined.isFinished:
+                if tThisFlipGlobal > sound_distractor_combined.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_distractor_combined.isFinished:
                     # keep track of stop time/frame for later
                     sound_distractor_combined.tStop = t  # not accounting for scr refresh
                     sound_distractor_combined.tStopRefresh = tThisFlipGlobal  # on global time
@@ -2472,12 +2809,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         instruct_verify.status = NOT_STARTED
         continueRoutine = True
         # update component parameters for each repeat
-        text_instruct_verify.setText("Would you respond to the " + STIMULI['oddball']['text'] + ", the " + STIMULI['regular']['text'] + ", or the " + STIMULI['distractor']['text'] + "? \n \nPlease tell the examiner verbally. You can also ask to hear the tones again if you are not sure.")
+        text_instruct_verify.setText("Which sound should receive the Green response?\n\nTell the examiner verbally. Ask to hear the examples again if you are not sure.")
         # create starting attributes for key_instruct_verify
         key_instruct_verify.keys = []
         key_instruct_verify.rt = []
         _key_instruct_verify_allKeys = []
-        read_instruct_verify.setSound('resource/instruct_verify_auditory.wav', hamming=True)
+        read_instruct_verify.setSound('resource/voiceover/auditory_response/verify.wav', hamming=True)
         read_instruct_verify.setVolume(1.0, log=False)
         read_instruct_verify.seek(0)
         # store start times for instruct_verify
@@ -2627,383 +2964,98 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     # completed 99.0 repeats of 'practice_loop'
     
     
-    # --- Prepare to start Routine "instruct_begin" ---
-    # create an object to store info about Routine instruct_begin
-    instruct_begin = data.Routine(
-        name='instruct_begin',
-        components=[text_instruct_begin, key_instruct_begin, read_instruct_begin],
+    # set up handler for the five ERPCore-style blocks
+    blocks = data.TrialHandler2(
+        name='blocks',
+        nReps=N_BLOCKS,
+        method='sequential',
+        extraInfo=expInfo,
+        originPath=-1,
+        trialList=[None],
+        seed=None,
     )
-    instruct_begin.status = NOT_STARTED
-    continueRoutine = True
-    # update component parameters for each repeat
-    text_instruct_begin.setText("Remember to press the Green key every time you hear the " + STIMULI['oddball']['text'] + ", and otherwise do not respond. Please perform this task with your eyes closed and try to respond as quickly and accurately as possible.\n \nPress the green key to begin the task.")
-    # create starting attributes for key_instruct_begin
-    key_instruct_begin.keys = []
-    key_instruct_begin.rt = []
-    _key_instruct_begin_allKeys = []
-    read_instruct_begin.setSound('resource/instruct_begin_auditory.wav', hamming=True)
-    read_instruct_begin.setVolume(1.0, log=False)
-    read_instruct_begin.seek(0)
-    # store start times for instruct_begin
-    instruct_begin.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
-    instruct_begin.tStart = globalClock.getTime(format='float')
-    instruct_begin.status = STARTED
-    instruct_begin.maxDuration = None
-    # keep track of which components have finished
-    instruct_beginComponents = instruct_begin.components
-    for thisComponent in instruct_begin.components:
-        thisComponent.tStart = None
-        thisComponent.tStop = None
-        thisComponent.tStartRefresh = None
-        thisComponent.tStopRefresh = None
-        if hasattr(thisComponent, 'status'):
-            thisComponent.status = NOT_STARTED
-    # reset timers
-    t = 0
-    _timeToFirstFrame = win.getFutureFlipTime(clock="now")
-    frameN = -1
-    
-    # --- Run Routine "instruct_begin" ---
-    instruct_begin.forceEnded = routineForceEnded = not continueRoutine
-    while continueRoutine:
-        # get current time
-        t = routineTimer.getTime()
-        tThisFlip = win.getFutureFlipTime(clock=routineTimer)
-        tThisFlipGlobal = win.getFutureFlipTime(clock=None)
-        frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
-        # update/draw components on each frame
-        
-        # *text_instruct_begin* updates
-        
-        # if text_instruct_begin is starting this frame...
-        if text_instruct_begin.status == NOT_STARTED and tThisFlip >= 0.0-frameTolerance:
-            # keep track of start time/frame for later
-            text_instruct_begin.frameNStart = frameN  # exact frame index
-            text_instruct_begin.tStart = t  # local t and not account for scr refresh
-            text_instruct_begin.tStartRefresh = tThisFlipGlobal  # on global time
-            win.timeOnFlip(text_instruct_begin, 'tStartRefresh')  # time at next scr refresh
-            # update status
-            text_instruct_begin.status = STARTED
-            text_instruct_begin.setAutoDraw(True)
-        
-        # if text_instruct_begin is active this frame...
-        if text_instruct_begin.status == STARTED:
-            # update params
-            pass
-        
-        # *key_instruct_begin* updates
-        waitOnFlip = False
-        
-        # if key_instruct_begin is starting this frame...
-        if key_instruct_begin.status == NOT_STARTED and tThisFlip >= 0.2-frameTolerance:
-            # keep track of start time/frame for later
-            key_instruct_begin.frameNStart = frameN  # exact frame index
-            key_instruct_begin.tStart = t  # local t and not account for scr refresh
-            key_instruct_begin.tStartRefresh = tThisFlipGlobal  # on global time
-            win.timeOnFlip(key_instruct_begin, 'tStartRefresh')  # time at next scr refresh
-            # update status
-            key_instruct_begin.status = STARTED
-            # keyboard checking is just starting
-            waitOnFlip = True
-            win.callOnFlip(key_instruct_begin.clock.reset)  # t=0 on next screen flip
-            win.callOnFlip(key_instruct_begin.clearEvents, eventType='keyboard')  # clear events on next screen flip
-        if key_instruct_begin.status == STARTED and not waitOnFlip:
-            theseKeys = key_instruct_begin.getKeys(keyList=['1'], ignoreKeys=["escape"], waitRelease=True)
-            _key_instruct_begin_allKeys.extend(theseKeys)
-            if len(_key_instruct_begin_allKeys):
-                key_instruct_begin.keys = _key_instruct_begin_allKeys[-1].name  # just the last key pressed
-                key_instruct_begin.rt = _key_instruct_begin_allKeys[-1].rt
-                key_instruct_begin.duration = _key_instruct_begin_allKeys[-1].duration
-                # a response ends the routine
-                continueRoutine = False
-        
-        # *read_instruct_begin* updates
-        
-        # if read_instruct_begin is starting this frame...
-        if read_instruct_begin.status == NOT_STARTED and tThisFlip >= 0.8-frameTolerance:
-            # keep track of start time/frame for later
-            read_instruct_begin.frameNStart = frameN  # exact frame index
-            read_instruct_begin.tStart = t  # local t and not account for scr refresh
-            read_instruct_begin.tStartRefresh = tThisFlipGlobal  # on global time
-            # update status
-            read_instruct_begin.status = STARTED
-            read_instruct_begin.play(when=win)  # sync with win flip
-        
-        # if read_instruct_begin is stopping this frame...
-        if read_instruct_begin.status == STARTED:
-            if bool(False) or read_instruct_begin.isFinished:
-                # keep track of stop time/frame for later
-                read_instruct_begin.tStop = t  # not accounting for scr refresh
-                read_instruct_begin.tStopRefresh = tThisFlipGlobal  # on global time
-                read_instruct_begin.frameNStop = frameN  # exact frame index
-                # update status
-                read_instruct_begin.status = FINISHED
-                read_instruct_begin.stop()
-        
-        # check for quit (typically the Esc key)
-        if defaultKeyboard.getKeys(keyList=["escape"]):
-            thisExp.status = FINISHED
-        if thisExp.status == FINISHED or endExpNow:
-            endExperiment(thisExp, win=win)
-            return
-        # pause experiment here if requested
-        if thisExp.status == PAUSED:
-            pauseExperiment(
-                thisExp=thisExp, 
-                win=win, 
-                timers=[routineTimer], 
-                playbackComponents=[read_instruct_begin]
-            )
-            # skip the frame we paused on
-            continue
-        
-        # check if all components have finished
-        if not continueRoutine:  # a component has requested a forced-end of Routine
-            instruct_begin.forceEnded = routineForceEnded = True
-            break
-        continueRoutine = False  # will revert to True if at least one component still running
-        for thisComponent in instruct_begin.components:
-            if hasattr(thisComponent, "status") and thisComponent.status != FINISHED:
-                continueRoutine = True
-                break  # at least one component has not yet finished
-        
-        # refresh the screen
-        if continueRoutine:  # don't flip if this routine is over or we'll get a blank screen
-            win.flip()
-    
-    # --- Ending Routine "instruct_begin" ---
-    for thisComponent in instruct_begin.components:
-        if hasattr(thisComponent, "setAutoDraw"):
-            thisComponent.setAutoDraw(False)
-    # store stop times for instruct_begin
-    instruct_begin.tStop = globalClock.getTime(format='float')
-    instruct_begin.tStopRefresh = tThisFlipGlobal
-    read_instruct_begin.pause()  # ensure sound has stopped at end of Routine
-    thisExp.nextEntry()
-    # the Routine "instruct_begin" was not non-slip safe, so reset the non-slip timer
-    routineTimer.reset()
-    
-    # --- Prepare to start Routine "close_eyes" ---
-    # create an object to store info about Routine close_eyes
-    close_eyes = data.Routine(
-        name='close_eyes',
-        components=[text_close_eyes, read_close_eyes],
-    )
-    close_eyes.status = NOT_STARTED
-    continueRoutine = True
-    # update component parameters for each repeat
-    read_close_eyes.setSound('resource/close_eyes.wav', secs=1.6, hamming=True)
-    read_close_eyes.setVolume(1.0, log=False)
-    read_close_eyes.seek(0)
-    # Run 'Begin Routine' code from trigger_trial_block
-    # Beginning of main experiment trial block
-    dev.activate_line(bitmask=block_start_code)
-    # no need to wait 500ms because this routine lasts 2.0s before trial triggers
-    # store start times for close_eyes
-    close_eyes.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
-    close_eyes.tStart = globalClock.getTime(format='float')
-    close_eyes.status = STARTED
-    close_eyes.maxDuration = None
-    # keep track of which components have finished
-    close_eyesComponents = close_eyes.components
-    for thisComponent in close_eyes.components:
-        thisComponent.tStart = None
-        thisComponent.tStop = None
-        thisComponent.tStartRefresh = None
-        thisComponent.tStopRefresh = None
-        if hasattr(thisComponent, 'status'):
-            thisComponent.status = NOT_STARTED
-    # reset timers
-    t = 0
-    _timeToFirstFrame = win.getFutureFlipTime(clock="now")
-    frameN = -1
-    
-    # --- Run Routine "close_eyes" ---
-    close_eyes.forceEnded = routineForceEnded = not continueRoutine
-    while continueRoutine and routineTimer.getTime() < 2.0:
-        # get current time
-        t = routineTimer.getTime()
-        tThisFlip = win.getFutureFlipTime(clock=routineTimer)
-        tThisFlipGlobal = win.getFutureFlipTime(clock=None)
-        frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
-        # update/draw components on each frame
-        
-        # *text_close_eyes* updates
-        
-        # if text_close_eyes is starting this frame...
-        if text_close_eyes.status == NOT_STARTED and tThisFlip >= 0.0-frameTolerance:
-            # keep track of start time/frame for later
-            text_close_eyes.frameNStart = frameN  # exact frame index
-            text_close_eyes.tStart = t  # local t and not account for scr refresh
-            text_close_eyes.tStartRefresh = tThisFlipGlobal  # on global time
-            win.timeOnFlip(text_close_eyes, 'tStartRefresh')  # time at next scr refresh
-            # update status
-            text_close_eyes.status = STARTED
-            text_close_eyes.setAutoDraw(True)
-        
-        # if text_close_eyes is active this frame...
-        if text_close_eyes.status == STARTED:
-            # update params
-            pass
-        
-        # if text_close_eyes is stopping this frame...
-        if text_close_eyes.status == STARTED:
-            # is it time to stop? (based on global clock, using actual start)
-            if tThisFlipGlobal > text_close_eyes.tStartRefresh + 2.0-frameTolerance:
-                # keep track of stop time/frame for later
-                text_close_eyes.tStop = t  # not accounting for scr refresh
-                text_close_eyes.tStopRefresh = tThisFlipGlobal  # on global time
-                text_close_eyes.frameNStop = frameN  # exact frame index
-                # update status
-                text_close_eyes.status = FINISHED
-                text_close_eyes.setAutoDraw(False)
-        
-        # *read_close_eyes* updates
-        
-        # if read_close_eyes is starting this frame...
-        if read_close_eyes.status == NOT_STARTED and tThisFlip >= 0.2-frameTolerance:
-            # keep track of start time/frame for later
-            read_close_eyes.frameNStart = frameN  # exact frame index
-            read_close_eyes.tStart = t  # local t and not account for scr refresh
-            read_close_eyes.tStartRefresh = tThisFlipGlobal  # on global time
-            # update status
-            read_close_eyes.status = STARTED
-            read_close_eyes.play(when=win)  # sync with win flip
-        
-        # if read_close_eyes is stopping this frame...
-        if read_close_eyes.status == STARTED:
-            # is it time to stop? (based on global clock, using actual start)
-            if tThisFlipGlobal > read_close_eyes.tStartRefresh + 1.6-frameTolerance or read_close_eyes.isFinished:
-                # keep track of stop time/frame for later
-                read_close_eyes.tStop = t  # not accounting for scr refresh
-                read_close_eyes.tStopRefresh = tThisFlipGlobal  # on global time
-                read_close_eyes.frameNStop = frameN  # exact frame index
-                # update status
-                read_close_eyes.status = FINISHED
-                read_close_eyes.stop()
-        
-        # check for quit (typically the Esc key)
-        if defaultKeyboard.getKeys(keyList=["escape"]):
-            thisExp.status = FINISHED
-        if thisExp.status == FINISHED or endExpNow:
-            endExperiment(thisExp, win=win)
-            return
-        # pause experiment here if requested
-        if thisExp.status == PAUSED:
-            pauseExperiment(
-                thisExp=thisExp, 
-                win=win, 
-                timers=[routineTimer], 
-                playbackComponents=[read_close_eyes]
-            )
-            # skip the frame we paused on
-            continue
-        
-        # check if all components have finished
-        if not continueRoutine:  # a component has requested a forced-end of Routine
-            close_eyes.forceEnded = routineForceEnded = True
-            break
-        continueRoutine = False  # will revert to True if at least one component still running
-        for thisComponent in close_eyes.components:
-            if hasattr(thisComponent, "status") and thisComponent.status != FINISHED:
-                continueRoutine = True
-                break  # at least one component has not yet finished
-        
-        # refresh the screen
-        if continueRoutine:  # don't flip if this routine is over or we'll get a blank screen
-            win.flip()
-    
-    # --- Ending Routine "close_eyes" ---
-    for thisComponent in close_eyes.components:
-        if hasattr(thisComponent, "setAutoDraw"):
-            thisComponent.setAutoDraw(False)
-    # store stop times for close_eyes
-    close_eyes.tStop = globalClock.getTime(format='float')
-    close_eyes.tStopRefresh = tThisFlipGlobal
-    read_close_eyes.pause()  # ensure sound has stopped at end of Routine
-    # using non-slip timing so subtract the expected duration of this Routine (unless ended on request)
-    if close_eyes.maxDurationReached:
-        routineTimer.addTime(-close_eyes.maxDuration)
-    elif close_eyes.forceEnded:
-        routineTimer.reset()
-    else:
-        routineTimer.addTime(-2.000000)
-    thisExp.nextEntry()
-    
-    # set up handler to look after randomisation of conditions etc
-    trials = data.TrialHandler2(
-        name='trials',
-        nReps=N_TRIALS, 
-        method='sequential', 
-        extraInfo=expInfo, 
-        originPath=-1, 
-        trialList=[None], 
-        seed=None, 
-    )
-    thisExp.addLoop(trials)  # add the loop to the experiment
-    thisTrial = trials.trialList[0]  # so we can initialise stimuli with some values
-    # abbreviate parameter names if possible (e.g. rgb = thisTrial.rgb)
-    if thisTrial != None:
-        for paramName in thisTrial:
-            globals()[paramName] = thisTrial[paramName]
+    thisExp.addLoop(blocks)
+    thisBlock = blocks.trialList[0]
     if thisSession is not None:
-        # if running in a Session with a Liaison client, send data up to now
         thisSession.sendExperimentData()
-    
-    for thisTrial in trials:
-        currentLoop = trials
-        thisExp.timestampOnFlip(win, 'thisRow.t', format=globalClock.format)
-        if thisSession is not None:
-            # if running in a Session with a Liaison client, send data up to now
-            thisSession.sendExperimentData()
-        # abbreviate parameter names if possible (e.g. rgb = thisTrial.rgb)
-        if thisTrial != None:
-            for paramName in thisTrial:
-                globals()[paramName] = thisTrial[paramName]
-        
-        # --- Prepare to start Routine "trial" ---
-        # create an object to store info about Routine trial
-        trial = data.Routine(
-            name='trial',
-            components=[sound_tone, tone_resp],
+
+    for thisBlock in blocks:
+        currentLoop = blocks
+        block_number = blocks.thisN + 1
+        block_trial_plan = [
+            dict(trial_spec) for trial_spec in block_trial_plans[block_number - 1]
+        ]
+        block_target_file = str(block_target_files[block_number - 1])
+        block_standard_file = str(block_standard_files[block_number - 1])
+
+        # Auditory response participants must hear the new target/standard pair
+        # before every block. These are instruction samples, not EEG trials, so
+        # no stimulus trigger is emitted for them.
+        text_instruct_begin.setText(
+            'Block {} of {}\n\nListen to the TARGET sound.'.format(
+                block_number, N_BLOCKS
+            )
         )
-        trial.status = NOT_STARTED
+        text_instruct_begin.draw()
+        win.flip()
+        core.wait(0.5)
+        sound_oddball.setSound(
+            block_target_file, secs=STIMULUS_DURATION, hamming=False
+        )
+        sound_oddball.setVolume(1.0, log=False)
+        sound_oddball.seek(0)
+        sound_oddball.play()
+        core.wait(STIMULUS_DURATION + 0.75)
+        sound_oddball.stop()
+
+        text_instruct_begin.setText(
+            'Block {} of {}\n\nListen to the STANDARD sound.'.format(
+                block_number, N_BLOCKS
+            )
+        )
+        text_instruct_begin.draw()
+        win.flip()
+        core.wait(0.5)
+        sound_regular.setSound(
+            block_standard_file, secs=STIMULUS_DURATION, hamming=False
+        )
+        sound_regular.setVolume(1.0, log=False)
+        sound_regular.seek(0)
+        sound_regular.play()
+        core.wait(STIMULUS_DURATION + 0.75)
+        sound_regular.stop()
+
+        # --- Prepare to start Routine "instruct_begin" ---
+        # create an object to store info about Routine instruct_begin
+        instruct_begin = data.Routine(
+            name='instruct_begin',
+            components=[text_instruct_begin, key_instruct_begin, read_instruct_begin],
+        )
+        instruct_begin.status = NOT_STARTED
         continueRoutine = True
         # update component parameters for each repeat
-        # Run 'Begin Routine' code from set_tone_frequency
-        # Pop the next trial's properties from the lists
-        iti              = iti_list.pop(0)
-        tone_frequency   = trial_frequencies.pop(0)
-        trial_type       = trial_types.pop(0)
-        
-        # Derive oddball/distractor flags from trial_type
-        tone_is_oddball    = trial_type == "oddball"
-        tone_is_distractor = trial_type == "distractor"
-        
-        # Log to data table
-        thisExp.addData('trial_type',          trial_type)
-        thisExp.addData('tone_is_oddball',    tone_is_oddball)
-        thisExp.addData('tone_is_distractor', tone_is_distractor)
-        thisExp.addData('iti',                 iti - STIMULUS_DURATION)
-        sound_tone.setSound(tone_frequency, secs=0.2, hamming=True)
-        sound_tone.setVolume(1.0, log=False)
-        sound_tone.seek(0)
-        # Run 'Begin Routine' code from trigger_tone
-        pulse_started = False
-        
-        # create starting attributes for tone_resp
-        tone_resp.keys = []
-        tone_resp.rt = []
-        _tone_resp_allKeys = []
-        # store start times for trial
-        trial.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
-        trial.tStart = globalClock.getTime(format='float')
-        trial.status = STARTED
-        thisExp.addData('trial.started', trial.tStart)
-        trial.maxDuration = None
+        text_instruct_begin.setText(
+            "Block {} of {}\n\nRemember to press the Green key every time "
+            "you hear the TARGET sound, and otherwise do not respond. Please "
+            "perform this task with your eyes closed and try to respond as "
+            "quickly and accurately as possible.\n\nPress the Green key to "
+            "begin this block.".format(block_number, N_BLOCKS)
+        )
+        # create starting attributes for key_instruct_begin
+        key_instruct_begin.keys = []
+        key_instruct_begin.rt = []
+        _key_instruct_begin_allKeys = []
+        read_instruct_begin.setSound('resource/voiceover/auditory_response/begin_block.wav', hamming=True)
+        read_instruct_begin.setVolume(1.0, log=False)
+        read_instruct_begin.seek(0)
+        # store start times for instruct_begin
+        instruct_begin.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
+        instruct_begin.tStart = globalClock.getTime(format='float')
+        instruct_begin.status = STARTED
+        instruct_begin.maxDuration = None
         # keep track of which components have finished
-        trialComponents = trial.components
-        for thisComponent in trial.components:
+        instruct_beginComponents = instruct_begin.components
+        for thisComponent in instruct_begin.components:
             thisComponent.tStart = None
             thisComponent.tStop = None
             thisComponent.tStartRefresh = None
@@ -3014,12 +3066,9 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         t = 0
         _timeToFirstFrame = win.getFutureFlipTime(clock="now")
         frameN = -1
-        
-        # --- Run Routine "trial" ---
-        # if trial has changed, end Routine now
-        if isinstance(trials, data.TrialHandler2) and thisTrial.thisN != trials.thisTrial.thisN:
-            continueRoutine = False
-        trial.forceEnded = routineForceEnded = not continueRoutine
+
+        # --- Run Routine "instruct_begin" ---
+        instruct_begin.forceEnded = routineForceEnded = not continueRoutine
         while continueRoutine:
             # get current time
             t = routineTimer.getTime()
@@ -3027,85 +3076,74 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             tThisFlipGlobal = win.getFutureFlipTime(clock=None)
             frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
             # update/draw components on each frame
-            
-            # *sound_tone* updates
-            
-            # if sound_tone is starting this frame...
-            if sound_tone.status == NOT_STARTED and t >= 0-frameTolerance:
+
+            # *text_instruct_begin* updates
+
+            # if text_instruct_begin is starting this frame...
+            if text_instruct_begin.status == NOT_STARTED and tThisFlip >= 0.0-frameTolerance:
                 # keep track of start time/frame for later
-                sound_tone.frameNStart = frameN  # exact frame index
-                sound_tone.tStart = t  # local t and not account for scr refresh
-                sound_tone.tStartRefresh = tThisFlipGlobal  # on global time
-                # add timestamp to datafile
-                thisExp.addData('sound_tone.started', t)
+                text_instruct_begin.frameNStart = frameN  # exact frame index
+                text_instruct_begin.tStart = t  # local t and not account for scr refresh
+                text_instruct_begin.tStartRefresh = tThisFlipGlobal  # on global time
+                win.timeOnFlip(text_instruct_begin, 'tStartRefresh')  # time at next scr refresh
                 # update status
-                sound_tone.status = STARTED
-                sound_tone.play()  # start the sound (it finishes automatically)
-            
-            # if sound_tone is stopping this frame...
-            if sound_tone.status == STARTED:
-                # is it time to stop? (based on global clock, using actual start)
-                if tThisFlipGlobal > sound_tone.tStartRefresh + 0.2-frameTolerance or sound_tone.isFinished:
-                    # keep track of stop time/frame for later
-                    sound_tone.tStop = t  # not accounting for scr refresh
-                    sound_tone.tStopRefresh = tThisFlipGlobal  # on global time
-                    sound_tone.frameNStop = frameN  # exact frame index
-                    # add timestamp to datafile
-                    thisExp.addData('sound_tone.stopped', t)
-                    # update status
-                    sound_tone.status = FINISHED
-                    sound_tone.stop()
-            # Run 'Each Frame' code from trigger_tone
-            if sound_tone.status == STARTED and not pulse_started:
-                if tone_is_oddball:
-                    dev.activate_line(bitmask=oddball_p300_code)
-                elif tone_is_distractor:
-                    dev.activate_line(bitmask=distractor_p300_code)
-                else:
-                    dev.activate_line(bitmask=regular_p300_code)
-            
-                pulse_started = True
-            
-            # *tone_resp* updates
+                text_instruct_begin.status = STARTED
+                text_instruct_begin.setAutoDraw(True)
+
+            # if text_instruct_begin is active this frame...
+            if text_instruct_begin.status == STARTED:
+                # update params
+                pass
+
+            # *key_instruct_begin* updates
             waitOnFlip = False
-            
-            # if tone_resp is starting this frame...
-            if tone_resp.status == NOT_STARTED and tThisFlip >= 0-frameTolerance:
+
+            # if key_instruct_begin is starting this frame...
+            if key_instruct_begin.status == NOT_STARTED and tThisFlip >= 0.2-frameTolerance:
                 # keep track of start time/frame for later
-                tone_resp.frameNStart = frameN  # exact frame index
-                tone_resp.tStart = t  # local t and not account for scr refresh
-                tone_resp.tStartRefresh = tThisFlipGlobal  # on global time
-                win.timeOnFlip(tone_resp, 'tStartRefresh')  # time at next scr refresh
-                # add timestamp to datafile
-                thisExp.timestampOnFlip(win, 'tone_resp.started')
+                key_instruct_begin.frameNStart = frameN  # exact frame index
+                key_instruct_begin.tStart = t  # local t and not account for scr refresh
+                key_instruct_begin.tStartRefresh = tThisFlipGlobal  # on global time
+                win.timeOnFlip(key_instruct_begin, 'tStartRefresh')  # time at next scr refresh
                 # update status
-                tone_resp.status = STARTED
+                key_instruct_begin.status = STARTED
                 # keyboard checking is just starting
                 waitOnFlip = True
-                win.callOnFlip(tone_resp.clock.reset)  # t=0 on next screen flip
-                win.callOnFlip(tone_resp.clearEvents, eventType='keyboard')  # clear events on next screen flip
-            
-            # if tone_resp is stopping this frame...
-            if tone_resp.status == STARTED:
-                # is it time to stop? (based on global clock, using actual start)
-                if tThisFlipGlobal > tone_resp.tStartRefresh + iti-frameTolerance:
+                win.callOnFlip(key_instruct_begin.clock.reset)  # t=0 on next screen flip
+                win.callOnFlip(key_instruct_begin.clearEvents, eventType='keyboard')  # clear events on next screen flip
+            if key_instruct_begin.status == STARTED and not waitOnFlip:
+                theseKeys = key_instruct_begin.getKeys(keyList=['1'], ignoreKeys=["escape"], waitRelease=True)
+                _key_instruct_begin_allKeys.extend(theseKeys)
+                if len(_key_instruct_begin_allKeys):
+                    key_instruct_begin.keys = _key_instruct_begin_allKeys[-1].name  # just the last key pressed
+                    key_instruct_begin.rt = _key_instruct_begin_allKeys[-1].rt
+                    key_instruct_begin.duration = _key_instruct_begin_allKeys[-1].duration
+                    # a response ends the routine
+                    continueRoutine = False
+
+            # *read_instruct_begin* updates
+
+            # if read_instruct_begin is starting this frame...
+            if read_instruct_begin.status == NOT_STARTED and tThisFlip >= 0.8-frameTolerance:
+                # keep track of start time/frame for later
+                read_instruct_begin.frameNStart = frameN  # exact frame index
+                read_instruct_begin.tStart = t  # local t and not account for scr refresh
+                read_instruct_begin.tStartRefresh = tThisFlipGlobal  # on global time
+                # update status
+                read_instruct_begin.status = STARTED
+                read_instruct_begin.play(when=win)  # sync with win flip
+
+            # if read_instruct_begin is stopping this frame...
+            if read_instruct_begin.status == STARTED:
+                if bool(False) or read_instruct_begin.isFinished:
                     # keep track of stop time/frame for later
-                    tone_resp.tStop = t  # not accounting for scr refresh
-                    tone_resp.tStopRefresh = tThisFlipGlobal  # on global time
-                    tone_resp.frameNStop = frameN  # exact frame index
-                    # add timestamp to datafile
-                    thisExp.timestampOnFlip(win, 'tone_resp.stopped')
+                    read_instruct_begin.tStop = t  # not accounting for scr refresh
+                    read_instruct_begin.tStopRefresh = tThisFlipGlobal  # on global time
+                    read_instruct_begin.frameNStop = frameN  # exact frame index
                     # update status
-                    tone_resp.status = FINISHED
-                    tone_resp.status = FINISHED
-            if tone_resp.status == STARTED and not waitOnFlip:
-                theseKeys = tone_resp.getKeys(keyList=['1'], ignoreKeys=["escape"], waitRelease=False)
-                _tone_resp_allKeys.extend(theseKeys)
-                if len(_tone_resp_allKeys):
-                    tone_resp.keys = [key.name for key in _tone_resp_allKeys]  # storing all keys
-                    tone_resp.rt = [key.rt for key in _tone_resp_allKeys]
-                    tone_resp.duration = [key.duration for key in _tone_resp_allKeys]
-            
+                    read_instruct_begin.status = FINISHED
+                    read_instruct_begin.stop()
+
             # check for quit (typically the Esc key)
             if defaultKeyboard.getKeys(keyList=["escape"]):
                 thisExp.status = FINISHED
@@ -3115,53 +3153,441 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             # pause experiment here if requested
             if thisExp.status == PAUSED:
                 pauseExperiment(
-                    thisExp=thisExp, 
-                    win=win, 
-                    timers=[routineTimer], 
-                    playbackComponents=[sound_tone]
+                    thisExp=thisExp,
+                    win=win,
+                    timers=[routineTimer],
+                    playbackComponents=[read_instruct_begin]
                 )
                 # skip the frame we paused on
                 continue
-            
+
             # check if all components have finished
             if not continueRoutine:  # a component has requested a forced-end of Routine
-                trial.forceEnded = routineForceEnded = True
+                instruct_begin.forceEnded = routineForceEnded = True
                 break
             continueRoutine = False  # will revert to True if at least one component still running
-            for thisComponent in trial.components:
+            for thisComponent in instruct_begin.components:
                 if hasattr(thisComponent, "status") and thisComponent.status != FINISHED:
                     continueRoutine = True
                     break  # at least one component has not yet finished
-            
+
             # refresh the screen
             if continueRoutine:  # don't flip if this routine is over or we'll get a blank screen
                 win.flip()
-        
-        # --- Ending Routine "trial" ---
-        for thisComponent in trial.components:
+
+        # --- Ending Routine "instruct_begin" ---
+        for thisComponent in instruct_begin.components:
             if hasattr(thisComponent, "setAutoDraw"):
                 thisComponent.setAutoDraw(False)
-        # store stop times for trial
-        trial.tStop = globalClock.getTime(format='float')
-        trial.tStopRefresh = tThisFlipGlobal
-        thisExp.addData('trial.stopped', trial.tStop)
-        # check responses
-        if tone_resp.keys in ['', [], None]:  # No response was made
-            tone_resp.keys = None
-        trials.addData('tone_resp.keys',tone_resp.keys)
-        if tone_resp.keys != None:  # we had a response
-            trials.addData('tone_resp.rt', tone_resp.rt)
-            trials.addData('tone_resp.duration', tone_resp.duration)
-        # the Routine "trial" was not non-slip safe, so reset the non-slip timer
-        routineTimer.reset()
+        # store stop times for instruct_begin
+        instruct_begin.tStop = globalClock.getTime(format='float')
+        instruct_begin.tStopRefresh = tThisFlipGlobal
+        read_instruct_begin.pause()  # ensure sound has stopped at end of Routine
         thisExp.nextEntry()
-        
-    # completed N_TRIALS repeats of 'trials'
-    
-    if thisSession is not None:
-        # if running in a Session with a Liaison client, send data up to now
-        thisSession.sendExperimentData()
-    
+        # the Routine "instruct_begin" was not non-slip safe, so reset the non-slip timer
+        routineTimer.reset()
+
+        # --- Prepare to start Routine "close_eyes" ---
+        # create an object to store info about Routine close_eyes
+        close_eyes = data.Routine(
+            name='close_eyes',
+            components=[text_close_eyes, read_close_eyes],
+        )
+        close_eyes.status = NOT_STARTED
+        continueRoutine = True
+        # update component parameters for each repeat
+        read_close_eyes.setSound('resource/voiceover/auditory_response/close_eyes.wav', hamming=True)
+        read_close_eyes.setVolume(1.0, log=False)
+        read_close_eyes.seek(0)
+        # Run 'Begin Routine' code from trigger_trial_block
+        # Beginning of main experiment trial block
+        dev.activate_line(bitmask=block_start_code)
+        # no need to wait 500ms because this routine lasts 2.0s before trial triggers
+        # store start times for close_eyes
+        close_eyes.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
+        close_eyes.tStart = globalClock.getTime(format='float')
+        close_eyes.status = STARTED
+        close_eyes.maxDuration = None
+        # keep track of which components have finished
+        close_eyesComponents = close_eyes.components
+        for thisComponent in close_eyes.components:
+            thisComponent.tStart = None
+            thisComponent.tStop = None
+            thisComponent.tStartRefresh = None
+            thisComponent.tStopRefresh = None
+            if hasattr(thisComponent, 'status'):
+                thisComponent.status = NOT_STARTED
+        # reset timers
+        t = 0
+        _timeToFirstFrame = win.getFutureFlipTime(clock="now")
+        frameN = -1
+
+        # --- Run Routine "close_eyes" ---
+        close_eyes.forceEnded = routineForceEnded = not continueRoutine
+        while continueRoutine and routineTimer.getTime() < 2.0:
+            # get current time
+            t = routineTimer.getTime()
+            tThisFlip = win.getFutureFlipTime(clock=routineTimer)
+            tThisFlipGlobal = win.getFutureFlipTime(clock=None)
+            frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
+            # update/draw components on each frame
+
+            # *text_close_eyes* updates
+
+            # if text_close_eyes is starting this frame...
+            if text_close_eyes.status == NOT_STARTED and tThisFlip >= 0.0-frameTolerance:
+                # keep track of start time/frame for later
+                text_close_eyes.frameNStart = frameN  # exact frame index
+                text_close_eyes.tStart = t  # local t and not account for scr refresh
+                text_close_eyes.tStartRefresh = tThisFlipGlobal  # on global time
+                win.timeOnFlip(text_close_eyes, 'tStartRefresh')  # time at next scr refresh
+                # update status
+                text_close_eyes.status = STARTED
+                text_close_eyes.setAutoDraw(True)
+
+            # if text_close_eyes is active this frame...
+            if text_close_eyes.status == STARTED:
+                # update params
+                pass
+
+            # if text_close_eyes is stopping this frame...
+            if text_close_eyes.status == STARTED:
+                # is it time to stop? (based on global clock, using actual start)
+                if tThisFlipGlobal > text_close_eyes.tStartRefresh + 2.0-frameTolerance:
+                    # keep track of stop time/frame for later
+                    text_close_eyes.tStop = t  # not accounting for scr refresh
+                    text_close_eyes.tStopRefresh = tThisFlipGlobal  # on global time
+                    text_close_eyes.frameNStop = frameN  # exact frame index
+                    # update status
+                    text_close_eyes.status = FINISHED
+                    text_close_eyes.setAutoDraw(False)
+
+            # *read_close_eyes* updates
+
+            # if read_close_eyes is starting this frame...
+            if read_close_eyes.status == NOT_STARTED and tThisFlip >= 0.2-frameTolerance:
+                # keep track of start time/frame for later
+                read_close_eyes.frameNStart = frameN  # exact frame index
+                read_close_eyes.tStart = t  # local t and not account for scr refresh
+                read_close_eyes.tStartRefresh = tThisFlipGlobal  # on global time
+                # update status
+                read_close_eyes.status = STARTED
+                read_close_eyes.play(when=win)  # sync with win flip
+
+            # if read_close_eyes is stopping this frame...
+            if read_close_eyes.status == STARTED:
+                # is it time to stop? (based on global clock, using actual start)
+                if tThisFlipGlobal > read_close_eyes.tStartRefresh + 1.6-frameTolerance or read_close_eyes.isFinished:
+                    # keep track of stop time/frame for later
+                    read_close_eyes.tStop = t  # not accounting for scr refresh
+                    read_close_eyes.tStopRefresh = tThisFlipGlobal  # on global time
+                    read_close_eyes.frameNStop = frameN  # exact frame index
+                    # update status
+                    read_close_eyes.status = FINISHED
+                    read_close_eyes.stop()
+
+            # check for quit (typically the Esc key)
+            if defaultKeyboard.getKeys(keyList=["escape"]):
+                thisExp.status = FINISHED
+            if thisExp.status == FINISHED or endExpNow:
+                endExperiment(thisExp, win=win)
+                return
+            # pause experiment here if requested
+            if thisExp.status == PAUSED:
+                pauseExperiment(
+                    thisExp=thisExp,
+                    win=win,
+                    timers=[routineTimer],
+                    playbackComponents=[read_close_eyes]
+                )
+                # skip the frame we paused on
+                continue
+
+            # check if all components have finished
+            if not continueRoutine:  # a component has requested a forced-end of Routine
+                close_eyes.forceEnded = routineForceEnded = True
+                break
+            continueRoutine = False  # will revert to True if at least one component still running
+            for thisComponent in close_eyes.components:
+                if hasattr(thisComponent, "status") and thisComponent.status != FINISHED:
+                    continueRoutine = True
+                    break  # at least one component has not yet finished
+
+            # refresh the screen
+            if continueRoutine:  # don't flip if this routine is over or we'll get a blank screen
+                win.flip()
+
+        # --- Ending Routine "close_eyes" ---
+        for thisComponent in close_eyes.components:
+            if hasattr(thisComponent, "setAutoDraw"):
+                thisComponent.setAutoDraw(False)
+        # store stop times for close_eyes
+        close_eyes.tStop = globalClock.getTime(format='float')
+        close_eyes.tStopRefresh = tThisFlipGlobal
+        read_close_eyes.pause()  # ensure sound has stopped at end of Routine
+        # using non-slip timing so subtract the expected duration of this Routine (unless ended on request)
+        if close_eyes.maxDurationReached:
+            routineTimer.addTime(-close_eyes.maxDuration)
+        elif close_eyes.forceEnded:
+            routineTimer.reset()
+        else:
+            routineTimer.addTime(-2.000000)
+        thisExp.nextEntry()
+
+        # set up handler to look after randomisation of conditions etc
+        trials = data.TrialHandler2(
+            name='trials',
+            nReps=TRIALS_PER_BLOCK,
+            method='sequential',
+            extraInfo=expInfo,
+            originPath=-1,
+            trialList=[None],
+            seed=None,
+        )
+        thisExp.addLoop(trials)  # add the loop to the experiment
+        thisTrial = trials.trialList[0]  # so we can initialise stimuli with some values
+        # abbreviate parameter names if possible (e.g. rgb = thisTrial.rgb)
+        if thisTrial != None:
+            for paramName in thisTrial:
+                globals()[paramName] = thisTrial[paramName]
+        if thisSession is not None:
+            # if running in a Session with a Liaison client, send data up to now
+            thisSession.sendExperimentData()
+
+        for thisTrial in trials:
+            currentLoop = trials
+            thisExp.timestampOnFlip(win, 'thisRow.t', format=globalClock.format)
+            if thisSession is not None:
+                # if running in a Session with a Liaison client, send data up to now
+                thisSession.sendExperimentData()
+            # abbreviate parameter names if possible (e.g. rgb = thisTrial.rgb)
+            if thisTrial != None:
+                for paramName in thisTrial:
+                    globals()[paramName] = thisTrial[paramName]
+
+            # --- Prepare to start Routine "trial" ---
+            # create an object to store info about Routine trial
+            trial = data.Routine(
+                name='trial',
+                components=[sound_tone, tone_resp],
+            )
+            trial.status = NOT_STARTED
+            continueRoutine = True
+            # update component parameters for each repeat
+            # Run 'Begin Routine' code from set_tone_frequency
+            # Pop this block's next randomized trial specification.
+            trial_spec = block_trial_plan.pop(0)
+            iti = trial_spec['iti']
+            tone_file = trial_spec['stimulus_file']
+            trial_type = trial_spec['trial_type']
+
+            # Derive oddball/distractor flags from trial_type
+            tone_is_oddball    = trial_type == "oddball"
+            tone_is_distractor = trial_type == "distractor"
+
+            # Log to data table
+            thisExp.addData('trial_type',          trial_type)
+            thisExp.addData('tone_is_oddball',    tone_is_oddball)
+            thisExp.addData('tone_is_distractor', tone_is_distractor)
+            thisExp.addData('iti',                 iti - STIMULUS_DURATION)
+            thisExp.addData('block', trial_spec['block'])
+            thisExp.addData('chunk', trial_spec['chunk'])
+            thisExp.addData('trial_in_chunk', trial_spec['trial_in_chunk'])
+            thisExp.addData('trial_in_block', trial_spec['trial_in_block'])
+            thisExp.addData(
+                'trial_in_session',
+                (trial_spec['block'] - 1) * TRIALS_PER_BLOCK
+                + trial_spec['trial_in_block']
+            )
+            thisExp.addData('auditory_stimulus_id', auditory_stimulus_id)
+            thisExp.addData('target_file', trial_spec['target_relative_file'])
+            thisExp.addData('standard_file', trial_spec['standard_relative_file'])
+            thisExp.addData('stimulus_file', trial_spec['stimulus_relative_file'])
+            thisExp.addData('distractor_id', trial_spec['distractor_id'])
+            thisExp.addData('distractor_slot', trial_spec['distractor_slot'])
+            thisExp.addData('distractor_sha256', trial_spec['distractor_sha256'])
+            sound_tone.setSound(
+                tone_file, secs=STIMULUS_DURATION, hamming=False
+            )
+            sound_tone.setVolume(1.0, log=False)
+            sound_tone.seek(0)
+            # Run 'Begin Routine' code from trigger_tone
+            pulse_started = False
+
+            # create starting attributes for tone_resp
+            tone_resp.keys = []
+            tone_resp.rt = []
+            _tone_resp_allKeys = []
+            # store start times for trial
+            trial.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
+            trial.tStart = globalClock.getTime(format='float')
+            trial.status = STARTED
+            thisExp.addData('trial.started', trial.tStart)
+            trial.maxDuration = None
+            # keep track of which components have finished
+            trialComponents = trial.components
+            for thisComponent in trial.components:
+                thisComponent.tStart = None
+                thisComponent.tStop = None
+                thisComponent.tStartRefresh = None
+                thisComponent.tStopRefresh = None
+                if hasattr(thisComponent, 'status'):
+                    thisComponent.status = NOT_STARTED
+            # reset timers
+            t = 0
+            _timeToFirstFrame = win.getFutureFlipTime(clock="now")
+            frameN = -1
+
+            # --- Run Routine "trial" ---
+            # if trial has changed, end Routine now
+            if isinstance(trials, data.TrialHandler2) and thisTrial.thisN != trials.thisTrial.thisN:
+                continueRoutine = False
+            trial.forceEnded = routineForceEnded = not continueRoutine
+            while continueRoutine:
+                # get current time
+                t = routineTimer.getTime()
+                tThisFlip = win.getFutureFlipTime(clock=routineTimer)
+                tThisFlipGlobal = win.getFutureFlipTime(clock=None)
+                frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
+                # update/draw components on each frame
+
+                # *sound_tone* updates
+
+                # if sound_tone is starting this frame...
+                if sound_tone.status == NOT_STARTED and t >= 0-frameTolerance:
+                    # keep track of start time/frame for later
+                    sound_tone.frameNStart = frameN  # exact frame index
+                    sound_tone.tStart = t  # local t and not account for scr refresh
+                    sound_tone.tStartRefresh = tThisFlipGlobal  # on global time
+                    # add timestamp to datafile
+                    thisExp.addData('sound_tone.started', t)
+                    # update status
+                    sound_tone.status = STARTED
+                    sound_tone.play()  # start the sound (it finishes automatically)
+
+                # if sound_tone is stopping this frame...
+                if sound_tone.status == STARTED:
+                    # is it time to stop? (based on global clock, using actual start)
+                    if tThisFlipGlobal > sound_tone.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_tone.isFinished:
+                        # keep track of stop time/frame for later
+                        sound_tone.tStop = t  # not accounting for scr refresh
+                        sound_tone.tStopRefresh = tThisFlipGlobal  # on global time
+                        sound_tone.frameNStop = frameN  # exact frame index
+                        # add timestamp to datafile
+                        thisExp.addData('sound_tone.stopped', t)
+                        # update status
+                        sound_tone.status = FINISHED
+                        sound_tone.stop()
+                # Run 'Each Frame' code from trigger_tone
+                if sound_tone.status == STARTED and not pulse_started:
+                    if tone_is_oddball:
+                        dev.activate_line(bitmask=oddball_p300_code)
+                    elif tone_is_distractor:
+                        dev.activate_line(bitmask=distractor_p300_code)
+                    else:
+                        dev.activate_line(bitmask=regular_p300_code)
+
+                    pulse_started = True
+
+                # *tone_resp* updates
+                waitOnFlip = False
+
+                # if tone_resp is starting this frame...
+                if tone_resp.status == NOT_STARTED and tThisFlip >= 0-frameTolerance:
+                    # keep track of start time/frame for later
+                    tone_resp.frameNStart = frameN  # exact frame index
+                    tone_resp.tStart = t  # local t and not account for scr refresh
+                    tone_resp.tStartRefresh = tThisFlipGlobal  # on global time
+                    win.timeOnFlip(tone_resp, 'tStartRefresh')  # time at next scr refresh
+                    # add timestamp to datafile
+                    thisExp.timestampOnFlip(win, 'tone_resp.started')
+                    # update status
+                    tone_resp.status = STARTED
+                    # keyboard checking is just starting
+                    waitOnFlip = True
+                    win.callOnFlip(tone_resp.clock.reset)  # t=0 on next screen flip
+                    win.callOnFlip(tone_resp.clearEvents, eventType='keyboard')  # clear events on next screen flip
+
+                # if tone_resp is stopping this frame...
+                if tone_resp.status == STARTED:
+                    # is it time to stop? (based on global clock, using actual start)
+                    if tThisFlipGlobal > tone_resp.tStartRefresh + iti-frameTolerance:
+                        # keep track of stop time/frame for later
+                        tone_resp.tStop = t  # not accounting for scr refresh
+                        tone_resp.tStopRefresh = tThisFlipGlobal  # on global time
+                        tone_resp.frameNStop = frameN  # exact frame index
+                        # add timestamp to datafile
+                        thisExp.timestampOnFlip(win, 'tone_resp.stopped')
+                        # update status
+                        tone_resp.status = FINISHED
+                        tone_resp.status = FINISHED
+                if tone_resp.status == STARTED and not waitOnFlip:
+                    theseKeys = tone_resp.getKeys(keyList=['1'], ignoreKeys=["escape"], waitRelease=False)
+                    _tone_resp_allKeys.extend(theseKeys)
+                    if len(_tone_resp_allKeys):
+                        tone_resp.keys = [key.name for key in _tone_resp_allKeys]  # storing all keys
+                        tone_resp.rt = [key.rt for key in _tone_resp_allKeys]
+                        tone_resp.duration = [key.duration for key in _tone_resp_allKeys]
+
+                # check for quit (typically the Esc key)
+                if defaultKeyboard.getKeys(keyList=["escape"]):
+                    thisExp.status = FINISHED
+                if thisExp.status == FINISHED or endExpNow:
+                    endExperiment(thisExp, win=win)
+                    return
+                # pause experiment here if requested
+                if thisExp.status == PAUSED:
+                    pauseExperiment(
+                        thisExp=thisExp,
+                        win=win,
+                        timers=[routineTimer],
+                        playbackComponents=[sound_tone]
+                    )
+                    # skip the frame we paused on
+                    continue
+
+                # check if all components have finished
+                if not continueRoutine:  # a component has requested a forced-end of Routine
+                    trial.forceEnded = routineForceEnded = True
+                    break
+                continueRoutine = False  # will revert to True if at least one component still running
+                for thisComponent in trial.components:
+                    if hasattr(thisComponent, "status") and thisComponent.status != FINISHED:
+                        continueRoutine = True
+                        break  # at least one component has not yet finished
+
+                # refresh the screen
+                if continueRoutine:  # don't flip if this routine is over or we'll get a blank screen
+                    win.flip()
+
+            # --- Ending Routine "trial" ---
+            for thisComponent in trial.components:
+                if hasattr(thisComponent, "setAutoDraw"):
+                    thisComponent.setAutoDraw(False)
+            # store stop times for trial
+            trial.tStop = globalClock.getTime(format='float')
+            trial.tStopRefresh = tThisFlipGlobal
+            thisExp.addData('trial.stopped', trial.tStop)
+            # check responses
+            if tone_resp.keys in ['', [], None]:  # No response was made
+                tone_resp.keys = None
+            trials.addData('tone_resp.keys',tone_resp.keys)
+            if tone_resp.keys != None:  # we had a response
+                trials.addData('tone_resp.rt', tone_resp.rt)
+                trials.addData('tone_resp.duration', tone_resp.duration)
+            # the Routine "trial" was not non-slip safe, so reset the non-slip timer
+            routineTimer.reset()
+            thisExp.nextEntry()
+
+        # completed TRIALS_PER_BLOCK repeats of 'trials'
+        # Run 'End Routine' code from trigger_trial_block_end
+        dev.activate_line(bitmask=block_end_code)
+        core.wait(0.5)
+
+        if thisSession is not None:
+            # if running in a Session with a Liaison client, send data up to now
+            thisSession.sendExperimentData()
+
     # --- Prepare to start Routine "__end__" ---
     # create an object to store info about Routine __end__
     __end__ = data.Routine(
@@ -3171,14 +3597,9 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     __end__.status = NOT_STARTED
     continueRoutine = True
     # update component parameters for each repeat
-    read_thank_you.setSound('resource/thank_you.wav', secs=2.7, hamming=True)
+    read_thank_you.setSound('resource/voiceover/auditory_response/thank_you.wav', hamming=True)
     read_thank_you.setVolume(1.0, log=False)
     read_thank_you.seek(0)
-    # Run 'Begin Routine' code from trigger_trial_block_end
-    # End of main experiment trial block
-    dev.activate_line(bitmask=block_end_code)
-    # no need to wait 500ms as this routine lasts 3.0s before experiment ends
-    
     # store start times for __end__
     __end__.tStartRefresh = win.getFutureFlipTime(clock=globalClock)
     __end__.tStart = globalClock.getTime(format='float')

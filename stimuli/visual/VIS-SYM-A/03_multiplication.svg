@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black multiplication symbol</title>
+  <path d="M111 420 413 722 109 1025 295 1211 599 908 901 1210 1082 1028 780 726 1085 421 899 235 594 540 292 238Z"
+        transform="matrix(0.819672131148 0 0 -0.819672131148 10.655737704918 1092.622950819672)"
+        fill="#000000"/>
+</svg>
