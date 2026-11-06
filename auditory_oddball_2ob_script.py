@@ -1023,6 +1023,15 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         assert sum(item['trial_type'] == 'regular' for item in block_plan) == 32
         assert sum(item['trial_type'] == 'oddball' for item in block_plan) == 4
         assert sum(item['trial_type'] == 'distractor' for item in block_plan) == 4
+        assert target_path != standard_path
+        assert {
+            item['stimulus_file'] for item in block_plan
+            if item['trial_type'] == 'regular'
+        } == {str(standard_path)}
+        assert {
+            item['stimulus_file'] for item in block_plan
+            if item['trial_type'] == 'oddball'
+        } == {str(target_path)}
         block_trial_plans.append(block_plan)
     assert len({
         item['stimulus_relative_file']
@@ -1241,14 +1250,33 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
     read_close_eyes.setVolume(1.0)
     
     # --- Initialize components for Routine "trial" ---
-    sound_tone = sound.Sound(
+    # Keep target, standard, and distractor playback on separate Sound objects.
+    # Reusing one PTB buffer for every file can allow a newly loaded WAV to
+    # replace a primary sound while a block is running on some installations.
+    sound_regular_trial = sound.Sound(
         'A', 
         secs=0.25,
         stereo=True, 
         hamming=True, 
-        speaker='sound_tone',    name='sound_tone'
+        speaker='sound_tone',    name='sound_regular_trial'
     )
-    sound_tone.setVolume(1.0)
+    sound_regular_trial.setVolume(1.0)
+    sound_oddball_trial = sound.Sound(
+        'A',
+        secs=0.25,
+        stereo=True,
+        hamming=True,
+        speaker='sound_tone',    name='sound_oddball_trial'
+    )
+    sound_oddball_trial.setVolume(1.0)
+    sound_distractor_trial = sound.Sound(
+        'A',
+        secs=0.25,
+        stereo=True,
+        hamming=True,
+        speaker='sound_tone',    name='sound_distractor_trial'
+    )
+    sound_distractor_trial.setVolume(1.0)
     tone_resp = keyboard.Keyboard(deviceName='tone_resp')
     
     # --- Initialize components for Routine "__end__" ---
@@ -2993,6 +3021,25 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
         ]
         block_target_file = str(block_target_files[block_number - 1])
         block_standard_file = str(block_standard_files[block_number - 1])
+        if block_target_file == block_standard_file:
+            configuration_error(
+                'Block {} target and standard resolve to the same WAV.'
+                .format(block_number)
+            )
+
+        # Load the block's two primary WAVs once into dedicated PTB buffers.
+        # These objects are never used for distractors and are not reloaded
+        # until the next block.
+        sound_oddball_trial.setSound(
+            block_target_file, secs=STIMULUS_DURATION, hamming=False
+        )
+        sound_oddball_trial.setVolume(1.0, log=False)
+        sound_oddball_trial.seek(0)
+        sound_regular_trial.setSound(
+            block_standard_file, secs=STIMULUS_DURATION, hamming=False
+        )
+        sound_regular_trial.setVolume(1.0, log=False)
+        sound_regular_trial.seek(0)
 
         # Auditory response participants must hear the new target/standard pair
         # before every block. These are instruction samples, not EEG trials, so
@@ -3375,7 +3422,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             # create an object to store info about Routine trial
             trial = data.Routine(
                 name='trial',
-                components=[sound_tone, tone_resp],
+                components=[
+                    sound_regular_trial,
+                    sound_oddball_trial,
+                    sound_distractor_trial,
+                    tone_resp,
+                ],
             )
             trial.status = NOT_STARTED
             continueRoutine = True
@@ -3390,6 +3442,41 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             # Derive oddball/distractor flags from trial_type
             tone_is_oddball    = trial_type == "oddball"
             tone_is_distractor = trial_type == "distractor"
+
+            # Enforce an immutable target/standard pair for this block before
+            # a sound is allowed to play.
+            if trial_spec['block'] != block_number:
+                configuration_error(
+                    'Trial plan block {} was used in runtime block {}.'
+                    .format(trial_spec['block'], block_number)
+                )
+            if trial_spec['target_relative_file'] != Path(
+                block_target_file
+            ).relative_to(study_root).as_posix():
+                configuration_error(
+                    'Target changed within block {}.'.format(block_number)
+                )
+            if trial_spec['standard_relative_file'] != Path(
+                block_standard_file
+            ).relative_to(study_root).as_posix():
+                configuration_error(
+                    'Standard changed within block {}.'.format(block_number)
+                )
+            if trial_type == 'regular':
+                expected_primary_file = block_standard_file
+                active_sound = sound_regular_trial
+            elif trial_type == 'oddball':
+                expected_primary_file = block_target_file
+                active_sound = sound_oddball_trial
+            else:
+                expected_primary_file = None
+                active_sound = sound_distractor_trial
+            if expected_primary_file is not None and tone_file != expected_primary_file:
+                configuration_error(
+                    '{} WAV changed within block {}.'.format(
+                        trial_type.title(), block_number
+                    )
+                )
 
             # Log to data table
             thisExp.addData('trial_type',          trial_type)
@@ -3412,11 +3499,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             thisExp.addData('distractor_id', trial_spec['distractor_id'])
             thisExp.addData('distractor_slot', trial_spec['distractor_slot'])
             thisExp.addData('distractor_sha256', trial_spec['distractor_sha256'])
-            sound_tone.setSound(
-                tone_file, secs=STIMULUS_DURATION, hamming=False
-            )
-            sound_tone.setVolume(1.0, log=False)
-            sound_tone.seek(0)
+            if tone_is_distractor:
+                sound_distractor_trial.setSound(
+                    tone_file, secs=STIMULUS_DURATION, hamming=False
+                )
+                sound_distractor_trial.setVolume(1.0, log=False)
+            active_sound.seek(0)
             # Run 'Begin Routine' code from trigger_tone
             pulse_started = False
 
@@ -3439,6 +3527,15 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
                 thisComponent.tStopRefresh = None
                 if hasattr(thisComponent, 'status'):
                     thisComponent.status = NOT_STARTED
+            # Only the Sound object selected for this trial may start. Mark
+            # the other two finished so they cannot play or hold the Routine.
+            for inactive_sound in (
+                sound_regular_trial,
+                sound_oddball_trial,
+                sound_distractor_trial,
+            ):
+                if inactive_sound is not active_sound:
+                    inactive_sound.status = FINISHED
             # reset timers
             t = 0
             _timeToFirstFrame = win.getFutureFlipTime(clock="now")
@@ -3457,35 +3554,35 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
                 frameN = frameN + 1  # number of completed frames (so 0 is the first frame)
                 # update/draw components on each frame
 
-                # *sound_tone* updates
+                # *active_sound* updates
 
-                # if sound_tone is starting this frame...
-                if sound_tone.status == NOT_STARTED and t >= 0-frameTolerance:
+                # if active_sound is starting this frame...
+                if active_sound.status == NOT_STARTED and t >= 0-frameTolerance:
                     # keep track of start time/frame for later
-                    sound_tone.frameNStart = frameN  # exact frame index
-                    sound_tone.tStart = t  # local t and not account for scr refresh
-                    sound_tone.tStartRefresh = tThisFlipGlobal  # on global time
+                    active_sound.frameNStart = frameN  # exact frame index
+                    active_sound.tStart = t  # local t and not account for scr refresh
+                    active_sound.tStartRefresh = tThisFlipGlobal  # on global time
                     # add timestamp to datafile
-                    thisExp.addData('sound_tone.started', t)
+                    thisExp.addData('stimulus_sound.started', t)
                     # update status
-                    sound_tone.status = STARTED
-                    sound_tone.play()  # start the sound (it finishes automatically)
+                    active_sound.status = STARTED
+                    active_sound.play()  # start the sound (it finishes automatically)
 
-                # if sound_tone is stopping this frame...
-                if sound_tone.status == STARTED:
+                # if active_sound is stopping this frame...
+                if active_sound.status == STARTED:
                     # is it time to stop? (based on global clock, using actual start)
-                    if tThisFlipGlobal > sound_tone.tStartRefresh + STIMULUS_DURATION-frameTolerance or sound_tone.isFinished:
+                    if tThisFlipGlobal > active_sound.tStartRefresh + STIMULUS_DURATION-frameTolerance or active_sound.isFinished:
                         # keep track of stop time/frame for later
-                        sound_tone.tStop = t  # not accounting for scr refresh
-                        sound_tone.tStopRefresh = tThisFlipGlobal  # on global time
-                        sound_tone.frameNStop = frameN  # exact frame index
+                        active_sound.tStop = t  # not accounting for scr refresh
+                        active_sound.tStopRefresh = tThisFlipGlobal  # on global time
+                        active_sound.frameNStop = frameN  # exact frame index
                         # add timestamp to datafile
-                        thisExp.addData('sound_tone.stopped', t)
+                        thisExp.addData('stimulus_sound.stopped', t)
                         # update status
-                        sound_tone.status = FINISHED
-                        sound_tone.stop()
+                        active_sound.status = FINISHED
+                        active_sound.stop()
                 # Run 'Each Frame' code from trigger_tone
-                if sound_tone.status == STARTED and not pulse_started:
+                if active_sound.status == STARTED and not pulse_started:
                     if tone_is_oddball:
                         dev.activate_line(bitmask=oddball_p300_code)
                     elif tone_is_distractor:
@@ -3547,7 +3644,7 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
                         thisExp=thisExp,
                         win=win,
                         timers=[routineTimer],
-                        playbackComponents=[sound_tone]
+                        playbackComponents=[active_sound]
                     )
                     # skip the frame we paused on
                     continue
@@ -3586,6 +3683,12 @@ def run(expInfo, thisExp, win, globalClock=None, thisSession=None):
             thisExp.nextEntry()
 
         # completed TRIALS_PER_BLOCK repeats of 'trials'
+        if block_trial_plan:
+            configuration_error(
+                'Block {} ended with {} unplayed trials.'.format(
+                    block_number, len(block_trial_plan)
+                )
+            )
         # Run 'End Routine' code from trigger_trial_block_end
         dev.activate_line(bitmask=block_end_code)
         core.wait(0.5)
