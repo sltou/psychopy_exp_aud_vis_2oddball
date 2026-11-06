@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black division symbol</title>
+  <path d="M421 981V1262H702V981ZM49 592V855H1074V592ZM421 185V466H702V185Z"
+        transform="matrix(0.742804085422 0 0 -0.742804085422 82.915506035283 1037.418755803157)"
+        fill="#000000"/>
+</svg>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black asterisk symbol</title>
+  <path d="M245 792 94 909Q166 990 244 1064Q275 1094 283 1102Q258 1106 140 1135Q55 1156 28 1166L87 1342Q218 1289 321 1225Q297 1388 297 1491H475Q475 1418 448 1223Q468 1231 534 1262Q624 1303 700 1332L753 1151Q642 1126 496 1102L616 967Q652 926 673 900L520 799L385 1022Q324 914 245 792Z"
+        transform="matrix(1.103448275862 0 0 -1.103448275862 69.103448275862 1759.586206896552)"
+        fill="#000000"/>
+</svg>

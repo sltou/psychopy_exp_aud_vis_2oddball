@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black number sign symbol</title>
+  <path d="M154 365H18V585H198L258 880H18V1101H303L382 1491H606L527 1101H748L825 1491H1057L977 1101H1115V880H932L872 585H1115V365H827L748 -25H525L602 365H380L301 -25H75ZM483 880 424 585H646L704 880Z"
+        transform="matrix(0.527704485488 0 0 -0.527704485488 201.055408970976 886.807387862797)"
+        fill="#000000"/>
+</svg>

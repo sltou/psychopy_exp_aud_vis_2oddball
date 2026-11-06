@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black digit 4</title>
+  <path d="M638 0V295H38V541L674 1472H910V542H1092V295H910V0ZM638 542V1043L301 542Z"
+        transform="matrix(0.534045393858 0 0 -0.534045393858 195.861148197597 886.114819759680)"
+        fill="#000000"/>
+</svg>

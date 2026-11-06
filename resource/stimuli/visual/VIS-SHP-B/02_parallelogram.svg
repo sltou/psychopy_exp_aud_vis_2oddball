@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     version="1.1"
+     width="1000"
+     height="1000"
+     viewBox="0 0 1000 1000"
+     preserveAspectRatio="xMidYMid meet"
+     color-interpolation="sRGB"
+     shape-rendering="geometricPrecision">
+  <title>Black parallelogram</title>
+  <polygon points="100,286.824515991523 750,286.824515991523 900,713.175484008477 250,713.175484008477" fill="#000000"/>
+</svg>
